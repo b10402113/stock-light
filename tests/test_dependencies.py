@@ -1,10 +1,9 @@
 import pytest
 from httpx import AsyncClient
 
-from src.dependencies import get_current_user_id, get_current_user
-from src.exceptions import BizException, ErrorCode
-from src.users.schema import UserRegisterRequest
-from src.users.service import UserService
+from src.auth.dependencies import get_current_user_id, get_current_user
+from src.auth.schema import UserRegisterRequest
+from src.auth.service import AuthService
 
 
 class TestJWTDependencies:
@@ -15,18 +14,18 @@ class TestJWTDependencies:
         """Test extracting user_id from valid token"""
         # Register user
         await client.post(
-            "/users/register",
+            "/auth/register",
             json={"email": "test@example.com", "password": "password123"},
         )
 
         # Login to get token
         login_response = await client.post(
-            "/users/login",
+            "/auth/login",
             json={"email": "test@example.com", "password": "password123"},
         )
         token = login_response.json()["data"]["access_token"]
 
-        # Manually test the dependency function
+        # Manually test dependency function
         from src.main import app
         from src.database import get_db
         from tests.conftest import get_test_db
@@ -43,6 +42,8 @@ class TestJWTDependencies:
     @pytest.mark.asyncio
     async def test_get_current_user_id_missing_header(self):
         """Test extracting user_id with missing Authorization header"""
+        from src.exceptions import BizException, ErrorCode
+
         with pytest.raises(BizException) as exc_info:
             await get_current_user_id(authorization=None)
 
@@ -51,6 +52,8 @@ class TestJWTDependencies:
     @pytest.mark.asyncio
     async def test_get_current_user_id_invalid_format(self):
         """Test extracting user_id with invalid header format"""
+        from src.exceptions import BizException, ErrorCode
+
         with pytest.raises(BizException) as exc_info:
             await get_current_user_id(authorization="InvalidFormat")
 
@@ -59,6 +62,8 @@ class TestJWTDependencies:
     @pytest.mark.asyncio
     async def test_get_current_user_id_invalid_token(self):
         """Test extracting user_id with invalid token"""
+        from src.exceptions import BizException, ErrorCode
+
         with pytest.raises(BizException) as exc_info:
             await get_current_user_id(authorization="Bearer invalidtoken")
 
@@ -75,46 +80,39 @@ class TestProtectedEndpoints:
         """Test accessing protected endpoint with valid token"""
         # Register user
         await client.post(
-            "/users/register",
+            "/auth/register",
             json={"email": "test@example.com", "password": "password123"},
         )
 
         # Login to get token
         login_response = await client.post(
-            "/users/login",
+            "/auth/login",
             json={"email": "test@example.com", "password": "password123"},
         )
         token = login_response.json()["data"]["access_token"]
 
-        # Use token to access protected endpoint (if one exists)
-        # For now, we verify the token works by decoding it
-        import jwt
-        from src.config import settings
+        # Use token to access protected endpoint
+        response = await client.get(
+            "/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
 
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALG])
-
-        assert "user_id" in payload
-        assert "exp" in payload
-
-    @pytest.mark.asyncio
-    async def test_protected_endpoint_without_token(self, client: AsyncClient):
-        """Test accessing protected endpoint without token"""
-        # This would fail in a real protected endpoint
-        # For now, we verify that missing token raises appropriate error
-        with pytest.raises(BizException) as exc_info:
-            await get_current_user_id(authorization=None)
-
-        assert exc_info.value.error_code == ErrorCode.UNAUTHORIZED
+        assert response.status_code == 200
+        data = response.json()
+        assert data["data"]["email"] == "test@example.com"
 
     @pytest.mark.asyncio
     async def test_get_current_user_success(self, db_session):
         """Test loading full user entity from valid token"""
+
         # Register user directly in database
         data = UserRegisterRequest(email="test@example.com", password="password123")
-        user_response = await UserService.register(db_session, data)
+        user_response = await AuthService.register(db_session, data)
 
         # Create token
-        token = UserService._create_access_token(user_response.id)
+        from src.auth.token import create_access_token
+
+        token = create_access_token(user_response.id)
 
         # Test get_current_user dependency
         user_id = await get_current_user_id(authorization=f"Bearer {token}")
@@ -128,9 +126,12 @@ class TestProtectedEndpoints:
     @pytest.mark.asyncio
     async def test_get_current_user_disabled(self, db_session):
         """Test loading disabled user raises error"""
+        from src.exceptions import BizException, ErrorCode
+        from src.users.service import UserService
+
         # Register user
         data = UserRegisterRequest(email="test@example.com", password="password123")
-        user_response = await UserService.register(db_session, data)
+        user_response = await AuthService.register(db_session, data)
 
         # Disable user
         user = await UserService.get_by_id(db_session, user_response.id)
@@ -138,7 +139,9 @@ class TestProtectedEndpoints:
         await db_session.commit()
 
         # Create token
-        token = UserService._create_access_token(user_response.id)
+        from src.auth.token import create_access_token
+
+        token = create_access_token(user_response.id)
 
         # Test get_current_user dependency
         user_id = await get_current_user_id(authorization=f"Bearer {token}")
@@ -151,8 +154,12 @@ class TestProtectedEndpoints:
     @pytest.mark.asyncio
     async def test_get_current_user_not_found(self, db_session):
         """Test loading nonexistent user raises error"""
+        from src.exceptions import BizException, ErrorCode
+
         # Create token for nonexistent user_id
-        token = UserService._create_access_token(999)
+        from src.auth.token import create_access_token
+
+        token = create_access_token(999)
 
         # Test get_current_user dependency
         user_id = await get_current_user_id(authorization=f"Bearer {token}")
