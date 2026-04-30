@@ -1,6 +1,6 @@
 """Auth domain models."""
 
-from sqlalchemy import String, ForeignKey, UniqueConstraint
+from sqlalchemy import String, ForeignKey, UniqueConstraint, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import Base
@@ -22,3 +22,6 @@ class OAuthAccount(Base):
     provider_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_picture: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    access_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    expires_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
