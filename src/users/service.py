@@ -1,5 +1,6 @@
 import bcrypt
 import jwt
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -7,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.exceptions import BizException, ErrorCode
-from src.users.model import User
+from src.users.model import User, OAuthAccount
+from src.users.oauth_client import oauth_client, OAuthProvider
 from src.users.schema import (
     LoginRequest,
     LoginResponse,
@@ -155,3 +157,158 @@ class UserService:
         )
         payload = {"user_id": user_id, "exp": expire}
         return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALG)
+
+    # ==================== OAuth Methods ====================
+
+    @staticmethod
+    def generate_oauth_state(provider: str) -> str:
+        """
+        產生 OAuth state token
+
+        Args:
+            provider: OAuth provider
+
+        Returns:
+            str: state token
+        """
+        return f"{provider}:{secrets.token_urlsafe(32)}"
+
+    @staticmethod
+    def verify_oauth_state(state: str) -> str:
+        """
+        驗證 OAuth state token
+
+        Args:
+            state: state token
+
+        Returns:
+            str: provider
+
+        Raises:
+            BizException: state 無效
+        """
+        try:
+            provider, _ = state.split(":", 1)
+            return provider
+        except ValueError:
+            raise BizException(ErrorCode.UNAUTHORIZED, "無效的 state token")
+
+    @staticmethod
+    async def oauth_login(
+        db: AsyncSession,
+        provider: str,
+        code: str,
+        state: str,
+    ) -> LoginResponse:
+        """
+        OAuth 登入
+
+        Args:
+            db: 資料庫會話
+            provider: OAuth provider
+            code: 授權碼
+            state: state token
+
+        Returns:
+            LoginResponse: JWT 存取權杖
+
+        Raises:
+            BizException: 登入失敗
+        """
+        # 1. 驗證 provider
+        if provider not in (OAuthProvider.GOOGLE, OAuthProvider.LINE):
+            raise BizException(ErrorCode.PARAM_ERROR, f"不支援的登入方式: {provider}")
+
+        # 2. 驗證 state
+        UserService.verify_oauth_state(state)
+
+        # 3. 用 code 換取 token
+        try:
+            token_data = await oauth_client.exchange_token(provider, code)
+            access_token = token_data["access_token"]
+        except Exception as exc:
+            raise BizException(ErrorCode.UNAUTHORIZED, "OAuth 認證失敗") from exc
+
+        # 4. 取得第三方用戶資訊
+        try:
+            user_info = await oauth_client.get_user_info(provider, access_token)
+        except Exception as exc:
+            raise BizException(ErrorCode.UNAUTHORIZED, "取得用戶資訊失敗") from exc
+
+        # 5. 查找或建立用戶
+        user = await UserService._find_or_create_oauth_user(db, provider, user_info)
+
+        # 6. 檢查用戶狀態
+        if not user.is_active:
+            raise BizException(ErrorCode.USER_DISABLED, "用戶已停用")
+
+        # 7. 產生 JWT
+        jwt_token = UserService._create_access_token(user.id)
+        return LoginResponse(access_token=jwt_token)
+
+    @staticmethod
+    async def _find_or_create_oauth_user(
+        db: AsyncSession,
+        provider: str,
+        user_info: dict,
+    ) -> User:
+        """查找或建立 OAuth 用戶"""
+        provider_user_id = user_info["id"]
+
+        # 查找已存在的 OAuth 帳戶
+        stmt = select(OAuthAccount).where(
+            OAuthAccount.provider == provider,
+            OAuthAccount.provider_user_id == provider_user_id,
+            OAuthAccount.is_deleted.is_(False),
+        )
+        result = await db.execute(stmt)
+        oauth_account = result.scalar_one_or_none()
+
+        if oauth_account:
+            # 已綁定，返回用戶
+            user = await UserService.get_by_id(db, oauth_account.user_id)
+            if user:
+                return user
+
+        # 檢查信箱是否已存在（嘗試綁定）
+        email = user_info.get("email")
+        user = None
+
+        if email:
+            user = await UserService.get_by_email(db, email)
+
+        if user:
+            # 綁定 OAuth 到現有帳戶
+            oauth_account = OAuthAccount(
+                user_id=user.id,
+                provider=provider,
+                provider_user_id=provider_user_id,
+                provider_email=email,
+                provider_name=user_info.get("name"),
+                provider_picture=user_info.get("picture"),
+            )
+            db.add(oauth_account)
+            await db.commit()
+            return user
+
+        # 建立新用戶
+        user = User(
+            email=email,
+            hashed_password=None,
+            is_active=True,
+        )
+        db.add(user)
+        await db.flush()  # 取得 user.id
+
+        oauth_account = OAuthAccount(
+            user_id=user.id,
+            provider=provider,
+            provider_user_id=provider_user_id,
+            provider_email=email,
+            provider_name=user_info.get("name"),
+            provider_picture=user_info.get("picture"),
+        )
+        db.add(oauth_account)
+        await db.commit()
+        await db.refresh(user)
+        return user

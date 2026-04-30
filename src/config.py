@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     # Fugo
     FUGO_API_KEY: str
 
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
+
+    # LINE Login (不同於 LINE Messaging API)
+    LINE_LOGIN_CHANNEL_ID: str | None = None
+    LINE_LOGIN_CHANNEL_SECRET: str | None = None
+    LINE_LOGIN_REDIRECT_URI: str = "http://localhost:8000/auth/line/callback"
+
     # Logging
     LOG_LEVEL: str = "INFO"
 

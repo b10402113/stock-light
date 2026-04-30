@@ -22,6 +22,10 @@ Pin to these versions or newer.
 
 ## Architecture Overview
 
+### Environment
+
+source .venv/bin/activate for any testing
+
 ### Component List
 
 | Component      | Count | Resources       | Responsibility                 |
@@ -82,6 +86,7 @@ src/
 ```
 
 **Domain self-containment principle:**
+
 - Each domain owns everything it needs (clients, helpers, tasks)
 - Shared utilities go in `src/` root (`exceptions.py`, `dependencies.py`)
 - No separate `core/`, `external/`, `indicators/`, `notifications/`, `tasks/`, `webhooks/` directories
@@ -110,13 +115,13 @@ router.py ──► service.py ──► model.py
 
 ### Layer Responsibilities
 
-| Layer   | File           | Allowed                                                                                    | Forbidden                                                                        |
-| ------- | -------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| router  | router.py      | Define API paths, call service, use Depends, validate schema, handle HTTP exceptions      | Direct DB operations, call client.py, write business logic, return model objects |
-| service | service.py     | Business logic, operate model (CRUD), call other services, call client.py, return model    | Define API paths, handle HTTP exceptions, directly return schema                 |
-| schema  | schema.py      | Define Request/Response, Pydantic validation                                               | DB queries, business logic                                                       |
-| model   | model.py       | Define DB table structure, SQLAlchemy ORM                                                  | Business logic, validation                                                       |
-| client  | client.py      | Wrap external API calls (Fugo, LINE)                                                       | Business logic                                                                  |
+| Layer   | File       | Allowed                                                                                 | Forbidden                                                                        |
+| ------- | ---------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| router  | router.py  | Define API paths, call service, use Depends, validate schema, handle HTTP exceptions    | Direct DB operations, call client.py, write business logic, return model objects |
+| service | service.py | Business logic, operate model (CRUD), call other services, call client.py, return model | Define API paths, handle HTTP exceptions, directly return schema                 |
+| schema  | schema.py  | Define Request/Response, Pydantic validation                                            | DB queries, business logic                                                       |
+| model   | model.py   | Define DB table structure, SQLAlchemy ORM                                               | Business logic, validation                                                       |
+| client  | client.py  | Wrap external API calls (Fugo, LINE)                                                    | Business logic                                                                   |
 
 ---
 

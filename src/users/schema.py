@@ -28,5 +28,19 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    email: str
+    email: str | None = None
     is_active: bool
+
+
+class OAuthUrlResponse(BaseModel):
+    """OAuth 授權 URL 響應"""
+
+    authorization_url: str = Field(..., description="授權 URL")
+    state: str = Field(..., description="CSRF 防護 state token")
+
+
+class OAuthCallbackRequest(BaseModel):
+    """OAuth 回調請求"""
+
+    code: str = Field(..., description="授權碼")
+    state: str = Field(..., description="CSRF 防護 state token")
