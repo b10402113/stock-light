@@ -1,25 +1,130 @@
-# Current Feature: Users & Auth Tables Update
+# Current Feature: StockTable Implementation
 
 ## Status
 
-Complete
+In Progress
 
 ## Goals
 
-- Update `src/users/model.py` - add display_name, picture_url, quota, subscription_status
-- Update `src/auth/models.py` - add access_token, refresh_token, expires_at
-- Create migration file to add columns to both tables
-- Run migration to apply changes
-- Update related schemas and services to handle new fields
-- Write tests for new functionality
+- [x] Create SQLAlchemy Stock model in `src/stocks/model.py`
+- [x] Create Alembic migration for stocks table
+- [x] Add basic CRUD service methods in `src/stocks/service.py`
+- [x] Add API endpoints in `src/stocks/router.py`
+- [x] Add Pydantic schemas in `src/stocks/schema.py`
+- [x] Write unit tests for stocks domain
+- [x] Register Stock model in `src/models/__init__.py`
 
 ## Notes
 
-- New columns have default values or are nullable to ensure backward compatibility
-- access_token and refresh_token should be encrypted before storage (future enhancement)
-- quota default value: 10
-- subscription_status default value: 'free'
-- No impact on existing data or APIs
+### Database Schema (from database-mermaid.md)
+
+```mermaid
+StockTable {
+    string id PK
+    string symbol UK "股票代碼 (ex: 2330.TW)"
+    string name
+    float current_price
+    jsonb calculated_indicators
+    boolean is_active
+    timestamp updated_at
+}
+```
+
+### Model Design
+
+Following project conventions:
+
+| Field                | Type              | Notes                                      |
+| -------------------- | ----------------- | ------------------------------------------ |
+| id                   | Integer (from Base) | Primary key, auto-increment              |
+| symbol               | String(20)        | Unique, indexed. e.g., "2330.TW"           |
+| name                 | String(255)       | Stock name in Chinese                      |
+| current_price        | DECIMAL(10,2)     | Use DECIMAL for exact calculation          |
+| calculated_indicators| JSONB             | Store RSI, KD, MACD etc. as JSON           |
+| is_active            | Boolean           | Business state (tradable/suspended)        |
+| created_at           | DateTime (from Base) | Auto-set on creation                    |
+| updated_at           | DateTime (from Base) | Auto-update on modification             |
+| is_deleted           | Boolean (from Base) | Soft delete marker                      |
+
+### JSONB Structure for calculated_indicators
+
+```json
+{
+  "rsi_14": 65.5,
+  "kd": {
+    "k": 72.3,
+    "d": 68.1
+  },
+  "macd": {
+    "macd": 12.5,
+    "signal": 10.2,
+    "histogram": 2.3
+  },
+  "updated_at": "2026-05-01T10:30:00Z"
+}
+```
+
+### Indexes
+
+| Index Name              | Columns      | Type    | Purpose                          |
+| ----------------------- | ------------ | ------- | -------------------------------- |
+| stocks_symbol_idx       | symbol       | Unique  | Fast lookup by stock symbol      |
+| stocks_is_active_idx    | is_active    | B-tree  | Filter active stocks             |
+
+### API Endpoints (Initial)
+
+| Method | Path               | Description                    |
+| ------ | ------------------ | ------------------------------ |
+| GET    | /stocks            | List all active stocks         |
+| GET    | /stocks/{symbol}   | Get stock by symbol            |
+| POST   | /stocks            | Create new stock (admin)       |
+| PATCH  | /stocks/{symbol}   | Update stock info              |
+| DELETE | /stocks/{symbol}   | Soft delete stock              |
+
+### Related Tables (Future Features)
+
+- `HistoricalPriceTable` - Stock price history (stock_id FK)
+- `WatchListStockTable` - Watch list membership (stock_id FK)
+- `IndicatorSubscriptionTable` - User subscriptions (stock_id FK)
+
+### File Checklist
+
+**model.py:**
+- [ ] Import Base from src.models.base
+- [ ] Define Stock class with all columns
+- [ ] Add __tablename__ = "stocks"
+- [ ] Use Mapped[] type hints
+
+**migration:**
+- [ ] Create `migrations/versions/2026-05-01_create_stocks_table.py`
+- [ ] Include all columns and indexes
+- [ ] Implement upgrade() and downgrade()
+
+**service.py:**
+- [ ] get_stock_by_symbol(db, symbol) -> Stock | None
+- [ ] get_stocks(db, is_active: bool = True) -> list[Stock]
+- [ ] create_stock(db, data: StockCreate) -> Stock
+- [ ] update_stock(db, symbol, data: StockUpdate) -> Stock
+- [ ] soft_delete_stock(db, symbol) -> bool
+
+**schema.py:**
+- [ ] StockResponse - Response model
+- [ ] StockCreate - Request for creating
+- [ ] StockUpdate - Request for updating
+- [ ] StockListResponse - Paginated list
+
+**router.py:**
+- [ ] GET /stocks - List stocks
+- [ ] GET /stocks/{symbol} - Get single stock
+- [ ] POST /stocks - Create stock
+- [ ] PATCH /stocks/{symbol} - Update stock
+- [ ] DELETE /stocks/{symbol} - Soft delete
+
+### Constraints
+
+- Symbol format: Taiwan stocks use `{code}.TW` (e.g., "2330.TW")
+- Price precision: 2 decimal places
+- Soft delete required (no hard delete)
 
 ## History
 

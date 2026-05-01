@@ -10,6 +10,7 @@ from src.models.base import Base
 from src.main import app
 from src.database import get_db
 from src.users.model import User  # noqa: F401 - Ensure model is registered with Base
+from src.stocks.model import Stock  # noqa: F401 - Ensure model is registered with Base
 
 # Use in-memory SQLite for testing
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
