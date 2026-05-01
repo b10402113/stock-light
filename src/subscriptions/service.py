@@ -1,0 +1,277 @@
+"""Subscription business logic."""
+
+from decimal import Decimal
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.stocks.model import Stock
+from src.subscriptions.model import IndicatorSubscription
+from src.subscriptions.schema import (
+    IndicatorSubscriptionCreate,
+    IndicatorSubscriptionUpdate,
+)
+from src.users.model import User
+
+
+class SubscriptionService:
+    """指標訂閱業務邏輯"""
+
+    @staticmethod
+    async def get_by_id(
+        db: AsyncSession, subscription_id: int
+    ) -> IndicatorSubscription | None:
+        """根據 ID 取得訂閱.
+
+        Args:
+            db: 資料庫會話
+            subscription_id: 訂閱 ID
+
+        Returns:
+            IndicatorSubscription | None: 訂閱實體或 None
+        """
+        stmt = select(IndicatorSubscription).where(
+            IndicatorSubscription.id == subscription_id,
+            IndicatorSubscription.is_deleted.is_(False),
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_user_subscriptions(
+        db: AsyncSession,
+        user_id: int,
+        cursor: int | None = None,
+        limit: int = 20,
+    ) -> tuple[list[IndicatorSubscription], int | None]:
+        """取得用戶所有訂閱 (Keyset Pagination).
+
+        Args:
+            db: 資料庫會話
+            user_id: 用戶 ID
+            cursor: 分頁游標 (上一頁最後一筆的 ID)
+            limit: 每頁數量
+
+        Returns:
+            tuple[list[IndicatorSubscription], int | None]: 訂閱列表和下一頁游標
+        """
+        stmt = (
+            select(IndicatorSubscription)
+            .where(
+                IndicatorSubscription.user_id == user_id,
+                IndicatorSubscription.is_deleted.is_(False),
+            )
+            .order_by(IndicatorSubscription.id.asc())
+            .limit(limit)
+        )
+
+        if cursor:
+            stmt = stmt.where(IndicatorSubscription.id > cursor)
+
+        result = await db.execute(stmt)
+        subscriptions = list(result.scalars().all())
+
+        next_cursor = None
+        if len(subscriptions) == limit:
+            next_cursor = subscriptions[-1].id
+
+        return subscriptions, next_cursor
+
+    @staticmethod
+    async def check_quota(db: AsyncSession, user_id: int) -> tuple[bool, int, int]:
+        """檢查用戶訂閱配額.
+
+        Args:
+            db: 資料庫會話
+            user_id: 用戶 ID
+
+        Returns:
+            tuple[bool, int, int]: (是否超額, 已使用數量, 配額上限)
+        """
+        # Get user quota
+        user = await db.get(User, user_id)
+        if not user:
+            raise ValueError(f"User not found: {user_id}")
+
+        quota = user.quota
+
+        # Count active subscriptions
+        count = await db.scalar(
+            select(func.count())
+            .select_from(IndicatorSubscription)
+            .where(
+                IndicatorSubscription.user_id == user_id,
+                IndicatorSubscription.is_deleted.is_(False),
+                IndicatorSubscription.is_active.is_(True),
+            )
+        )
+        used = count or 0
+
+        return used < quota, used, quota
+
+    @staticmethod
+    async def check_duplicate(
+        db: AsyncSession,
+        user_id: int,
+        stock_id: int,
+        indicator_type: str,
+        operator: str,
+        target_value: Decimal,
+    ) -> bool:
+        """檢查是否已存在相同訂閱.
+
+        Args:
+            db: 資料庫會話
+            user_id: 用戶 ID
+            stock_id: 股票 ID
+            indicator_type: 指標類型
+            operator: 運算子
+            target_value: 目標值
+
+        Returns:
+            bool: 是否存在重複
+        """
+        exists = await db.scalar(
+            select(func.count())
+            .select_from(IndicatorSubscription)
+            .where(
+                IndicatorSubscription.user_id == user_id,
+                IndicatorSubscription.stock_id == stock_id,
+                IndicatorSubscription.indicator_type == indicator_type,
+                IndicatorSubscription.operator == operator,
+                IndicatorSubscription.target_value == target_value,
+                IndicatorSubscription.is_deleted.is_(False),
+            )
+        )
+        return (exists or 0) > 0
+
+    @staticmethod
+    async def create(
+        db: AsyncSession,
+        user_id: int,
+        data: IndicatorSubscriptionCreate,
+    ) -> IndicatorSubscription:
+        """創建訂閱.
+
+        Args:
+            db: 資料庫會話
+            user_id: 用戶 ID
+            data: 訂閱創建數據
+
+        Returns:
+            IndicatorSubscription: 創建後的訂閱實體
+
+        Raises:
+            ValueError: 配額超額、股票不存在、或重複訂閱
+        """
+        # Check quota
+        has_quota, used, quota = await SubscriptionService.check_quota(db, user_id)
+        if not has_quota:
+            raise ValueError(
+                f"Subscription quota exceeded: used {used}/{quota}"
+            )
+
+        # Verify stock exists and is active
+        stock = await db.get(Stock, data.stock_id)
+        if not stock or stock.is_deleted or not stock.is_active:
+            raise ValueError(f"Stock not found or inactive: {data.stock_id}")
+
+        # Check for duplicate
+        is_duplicate = await SubscriptionService.check_duplicate(
+            db,
+            user_id,
+            data.stock_id,
+            data.indicator_type.value,
+            data.operator.value,
+            data.target_value,
+        )
+        if is_duplicate:
+            raise ValueError(
+                f"Duplicate subscription already exists for this condition"
+            )
+
+        subscription = IndicatorSubscription(
+            user_id=user_id,
+            stock_id=data.stock_id,
+            indicator_type=data.indicator_type.value,
+            operator=data.operator.value,
+            target_value=data.target_value,
+            compound_condition=data.compound_condition,
+        )
+        db.add(subscription)
+        await db.commit()
+        await db.refresh(subscription)
+        return subscription
+
+    @staticmethod
+    async def update(
+        db: AsyncSession,
+        subscription: IndicatorSubscription,
+        data: IndicatorSubscriptionUpdate,
+    ) -> IndicatorSubscription:
+        """更新訂閱.
+
+        Args:
+            db: 資料庫會話
+            subscription: 訂閱實體
+            data: 訂閱更新數據
+
+        Returns:
+            IndicatorSubscription: 更新後的訂閱實體
+        """
+        update_data = data.model_dump(exclude_unset=True)
+
+        # Convert enum values to strings if present
+        if "indicator_type" in update_data and update_data["indicator_type"]:
+            update_data["indicator_type"] = update_data["indicator_type"].value
+        if "operator" in update_data and update_data["operator"]:
+            update_data["operator"] = update_data["operator"].value
+
+        for key, value in update_data.items():
+            setattr(subscription, key, value)
+
+        await db.commit()
+        await db.refresh(subscription)
+        return subscription
+
+    @staticmethod
+    async def soft_delete(
+        db: AsyncSession, subscription: IndicatorSubscription
+    ) -> IndicatorSubscription:
+        """軟刪除訂閱.
+
+        Args:
+            db: 資料庫會話
+            subscription: 訂閱實體
+
+        Returns:
+            IndicatorSubscription: 軟刪除後的訂閱實體
+        """
+        subscription.soft_delete()
+        await db.commit()
+        await db.refresh(subscription)
+        return subscription
+
+    @staticmethod
+    async def get_active_subscriptions_for_stock(
+        db: AsyncSession, stock_id: int
+    ) -> list[IndicatorSubscription]:
+        """取得股票的所有活躍訂閱 (用於觸發檢查).
+
+        Args:
+            db: 資料庫會話
+            stock_id: 股票 ID
+
+        Returns:
+            list[IndicatorSubscription]: 活躍訂閱列表
+        """
+        stmt = (
+            select(IndicatorSubscription)
+            .where(
+                IndicatorSubscription.stock_id == stock_id,
+                IndicatorSubscription.is_deleted.is_(False),
+                IndicatorSubscription.is_active.is_(True),
+            )
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())

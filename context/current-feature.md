@@ -1,14 +1,25 @@
-# Current Feature
+# Current Feature: IndicatorSubscription Implementation
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
 ## Notes
 
 ## History
+
+- 2026-05-01: IndicatorSubscription Implementation
+  - Created SQLAlchemy IndicatorSubscription model with User/Stock relationships
+  - Added back-reference on Stock model for subscriptions
+  - Created Alembic migration with indexes and partial unique constraint
+  - Implemented SubscriptionService with CRUD operations and quota validation
+  - Added REST endpoints: GET/POST /subscriptions, GET/PATCH/DELETE /subscriptions/{id}
+  - Created Pydantic schemas: IndicatorType enum, Operator enum, IndicatorSubscriptionCreate/Update/Response
+  - Wrote 15 unit tests for subscriptions router
+  - Updated API documentation with Subscriptions API section
+  - All 74 tests passing
 
 - 2026-05-01: WatchList Implementation
   - Created SQLAlchemy models: Watchlist, WatchlistStock (junction table)

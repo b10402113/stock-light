@@ -8,6 +8,7 @@ from src.users.router import router as users_router
 from src.auth.router import router as auth_router
 from src.stocks.router import router as stocks_router
 from src.watchlists.router import router as watchlists_router
+from src.subscriptions.router import router as subscriptions_router
 
 # 建立 FastAPI 應用
 app = FastAPI(
@@ -35,3 +36,4 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(stocks_router)
 app.include_router(watchlists_router)
+app.include_router(subscriptions_router)
