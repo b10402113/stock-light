@@ -1,6 +1,6 @@
 """Stock business logic (CRUD only)."""
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.stocks.model import Stock
@@ -50,28 +50,77 @@ class StockService:
     async def get_stocks(
         db: AsyncSession,
         is_active: bool | None = None,
+        cursor: int | None = None,
         limit: int = 100,
-        offset: int = 0,
-    ) -> list[Stock]:
-        """取得股票列表.
+    ) -> tuple[list[Stock], int | None]:
+        """取得股票列表 (Keyset Pagination).
 
         Args:
             db: 資料庫會話
             is_active: 是否只取活躍股票
+            cursor: 分頁游標 (上一頁最後一筆的 ID)
             limit: 最大返回數量
-            offset: 偏移量
 
         Returns:
-            list[Stock]: 股票列表
+            tuple[list[Stock], int | None]: 股票列表和下一頁游標
         """
         stmt = select(Stock).where(Stock.is_deleted.is_(False))
 
         if is_active is not None:
             stmt = stmt.where(Stock.is_active == is_active)
 
-        stmt = stmt.order_by(Stock.symbol).limit(limit).offset(offset)
+        if cursor:
+            stmt = stmt.where(Stock.id > cursor)
+
+        stmt = stmt.order_by(Stock.id.asc()).limit(limit)
         result = await db.execute(stmt)
-        return list(result.scalars().all())
+        stocks = list(result.scalars().all())
+
+        next_cursor = None
+        if len(stocks) == limit:
+            next_cursor = stocks[-1].id
+
+        return stocks, next_cursor
+
+    @staticmethod
+    async def search_stocks(
+        db: AsyncSession,
+        query: str,
+        cursor: int | None = None,
+        limit: int = 100,
+    ) -> tuple[list[Stock], int | None]:
+        """搜索股票 (Keyset Pagination).
+
+        Args:
+            db: 資料庫會話
+            query: 搜索關鍵字 (匹配 symbol 或 name)
+            cursor: 分頁游標 (上一頁最後一筆的 ID)
+            limit: 最大返回數量
+
+        Returns:
+            tuple[list[Stock], int | None]: 股票列表和下一頁游標
+        """
+        pattern = f"%{query}%"
+        stmt = select(Stock).where(
+            Stock.is_deleted.is_(False),
+            or_(
+                Stock.symbol.ilike(pattern),
+                Stock.name.ilike(pattern),
+            ),
+        )
+
+        if cursor:
+            stmt = stmt.where(Stock.id > cursor)
+
+        stmt = stmt.order_by(Stock.id.asc()).limit(limit)
+        result = await db.execute(stmt)
+        stocks = list(result.scalars().all())
+
+        next_cursor = None
+        if len(stocks) == limit:
+            next_cursor = stocks[-1].id
+
+        return stocks, next_cursor
 
     @staticmethod
     async def create(db: AsyncSession, data: StockCreate) -> Stock:

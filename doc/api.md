@@ -295,6 +295,67 @@ Get a list of all stocks with optional filtering.
 
 ---
 
+### Search Stocks
+
+Search stocks by symbol or name with keyset pagination.
+
+**Endpoint**: `GET /stocks/search`
+
+**Query Parameters**:
+
+| Parameter | Type    | Required | Default | Description                              |
+| --------- | ------- | -------- | ------- | ---------------------------------------- |
+| q         | string  | Yes      | -       | Search query (matches symbol or name)    |
+| cursor    | integer | No       | -       | Pagination cursor (last ID from previous page) |
+| limit     | integer | No       | 100     | Maximum number of results (1-100)        |
+
+**Response** (200 OK):
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "data": [
+      {
+        "id": 1,
+        "symbol": "2330.TW",
+        "name": "台積電",
+        "current_price": "650.00",
+        "calculated_indicators": null,
+        "is_active": true
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  }
+}
+```
+
+**Response Schema**:
+
+| Field       | Type             | Description                              |
+| ----------- | ---------------- | ---------------------------------------- |
+| data        | array            | List of matching stocks                  |
+| next_cursor | integer \| null  | Cursor for next page (null if no more)   |
+| has_more    | boolean          | Whether more results exist               |
+
+**Features**:
+
+- Case-insensitive partial matching
+- Searches both `symbol` and `name` fields (OR logic)
+- Keyset pagination for efficient large result sets
+
+**Example Searches**:
+
+| Query   | Matches                              |
+| ------- | ------------------------------------ |
+| `2330`  | Stocks with "2330" in symbol or name |
+| `台積`  | Stocks with "台積" in symbol or name |
+| `tw`    | All stocks with ".TW" suffix         |
+
+---
+
 ### Get Stock
 
 Get a single stock by symbol.
@@ -1220,6 +1281,14 @@ Soft delete a subscription.
 ---
 
 ## Changelog
+
+### v1.4.0 (2026-05-02)
+
+- Added Stock Search API
+- Search stocks by symbol or name
+- Case-insensitive partial matching
+- Keyset pagination support
+- GET /stocks/search endpoint
 
 ### v1.3.0 (2026-05-01)
 
