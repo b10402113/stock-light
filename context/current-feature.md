@@ -1,25 +1,12 @@
-# Current Feature: WatchList
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Create `watchlists` table for user watchlists
-- Create `watchlist_stocks` junction table for stocks in watchlists
-- Implement CRUD endpoints for watchlist management
-- Implement CRUD endpoints for adding/removing stocks from watchlists
-- Ensure proper authorization (users can only access their own watchlists)
-- Add tests for watchlist functionality
-
 ## Notes
-
-- Follow domain-driven module structure: `src/watchlists/`
-- Use soft delete for all deletions
-- First watchlist created should be set as default
-- Prevent duplicate stocks in the same watchlist
-- Validate that stock exists and is active before adding
 
 ## History
 
