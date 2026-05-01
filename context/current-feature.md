@@ -1,61 +1,22 @@
-# Current Feature: Stock Search API
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- [x] Add GET /stocks/search endpoint with query parameter `q`
-- [x] Search matches both symbol and name fields (OR logic)
-- [x] Case-insensitive partial matching using PostgreSQL ILIKE
-- [x] Returns StockListResponse with keyset pagination support
-- [x] Add `search_stocks` method to StockService
-- [x] Write unit tests for search functionality
-- [x] Update API documentation
-
 ## Notes
 
-### Technical Details
-
-- Use SQLAlchemy `ilike` for case-insensitive pattern matching
-- Pattern: `f"%{query}%"` for partial match
-- Query parameter: `q` (required, min 1 character)
-- Reuse existing `StockListResponse` schema for consistency
-- Add GIN trigram index for better search performance on large datasets
-
-### Endpoint Design
-
-```
-GET /stocks/search?q=2330&limit=20
-```
-
-Response:
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "symbol": "2330.TW",
-      "name": "台積電",
-      "current_price": 580.00,
-      "calculated_indicators": null,
-      "is_active": true
-    }
-  ],
-  "next_cursor": null,
-  "has_more": false
-}
-```
-
-### Implementation Order
-
-1. Add `search_stocks` method to service.py
-2. Add GET /stocks/search endpoint to router.py
-3. Write tests
-4. Run all tests to verify no regressions
-
 ## History
+
+- 2026-05-02: Stock Search API Implementation
+  - Added GET /stocks/search endpoint with query parameter `q`
+  - Case-insensitive partial matching on symbol and name using PostgreSQL ILIKE
+  - Add search_stocks method to StockService
+  - Write 6 unit tests for search functionality
+  - Update API documentation with search endpoint details
+  - All 82 tests passing
 
 - 2026-05-01: IndicatorSubscription Implementation
   - Created SQLAlchemy IndicatorSubscription model with User/Stock relationships
