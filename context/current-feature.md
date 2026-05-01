@@ -1,132 +1,48 @@
-# Current Feature: StockTable Implementation
+# Current Feature: WatchList
 
 ## Status
 
-In Progress
+Complete
 
 ## Goals
 
-- [x] Create SQLAlchemy Stock model in `src/stocks/model.py`
-- [x] Create Alembic migration for stocks table
-- [x] Add basic CRUD service methods in `src/stocks/service.py`
-- [x] Add API endpoints in `src/stocks/router.py`
-- [x] Add Pydantic schemas in `src/stocks/schema.py`
-- [x] Write unit tests for stocks domain
-- [x] Register Stock model in `src/models/__init__.py`
+- Create `watchlists` table for user watchlists
+- Create `watchlist_stocks` junction table for stocks in watchlists
+- Implement CRUD endpoints for watchlist management
+- Implement CRUD endpoints for adding/removing stocks from watchlists
+- Ensure proper authorization (users can only access their own watchlists)
+- Add tests for watchlist functionality
 
 ## Notes
 
-### Database Schema (from database-mermaid.md)
-
-```mermaid
-StockTable {
-    string id PK
-    string symbol UK "股票代碼 (ex: 2330.TW)"
-    string name
-    float current_price
-    jsonb calculated_indicators
-    boolean is_active
-    timestamp updated_at
-}
-```
-
-### Model Design
-
-Following project conventions:
-
-| Field                | Type              | Notes                                      |
-| -------------------- | ----------------- | ------------------------------------------ |
-| id                   | Integer (from Base) | Primary key, auto-increment              |
-| symbol               | String(20)        | Unique, indexed. e.g., "2330.TW"           |
-| name                 | String(255)       | Stock name in Chinese                      |
-| current_price        | DECIMAL(10,2)     | Use DECIMAL for exact calculation          |
-| calculated_indicators| JSONB             | Store RSI, KD, MACD etc. as JSON           |
-| is_active            | Boolean           | Business state (tradable/suspended)        |
-| created_at           | DateTime (from Base) | Auto-set on creation                    |
-| updated_at           | DateTime (from Base) | Auto-update on modification             |
-| is_deleted           | Boolean (from Base) | Soft delete marker                      |
-
-### JSONB Structure for calculated_indicators
-
-```json
-{
-  "rsi_14": 65.5,
-  "kd": {
-    "k": 72.3,
-    "d": 68.1
-  },
-  "macd": {
-    "macd": 12.5,
-    "signal": 10.2,
-    "histogram": 2.3
-  },
-  "updated_at": "2026-05-01T10:30:00Z"
-}
-```
-
-### Indexes
-
-| Index Name              | Columns      | Type    | Purpose                          |
-| ----------------------- | ------------ | ------- | -------------------------------- |
-| stocks_symbol_idx       | symbol       | Unique  | Fast lookup by stock symbol      |
-| stocks_is_active_idx    | is_active    | B-tree  | Filter active stocks             |
-
-### API Endpoints (Initial)
-
-| Method | Path               | Description                    |
-| ------ | ------------------ | ------------------------------ |
-| GET    | /stocks            | List all active stocks         |
-| GET    | /stocks/{symbol}   | Get stock by symbol            |
-| POST   | /stocks            | Create new stock (admin)       |
-| PATCH  | /stocks/{symbol}   | Update stock info              |
-| DELETE | /stocks/{symbol}   | Soft delete stock              |
-
-### Related Tables (Future Features)
-
-- `HistoricalPriceTable` - Stock price history (stock_id FK)
-- `WatchListStockTable` - Watch list membership (stock_id FK)
-- `IndicatorSubscriptionTable` - User subscriptions (stock_id FK)
-
-### File Checklist
-
-**model.py:**
-- [ ] Import Base from src.models.base
-- [ ] Define Stock class with all columns
-- [ ] Add __tablename__ = "stocks"
-- [ ] Use Mapped[] type hints
-
-**migration:**
-- [ ] Create `migrations/versions/2026-05-01_create_stocks_table.py`
-- [ ] Include all columns and indexes
-- [ ] Implement upgrade() and downgrade()
-
-**service.py:**
-- [ ] get_stock_by_symbol(db, symbol) -> Stock | None
-- [ ] get_stocks(db, is_active: bool = True) -> list[Stock]
-- [ ] create_stock(db, data: StockCreate) -> Stock
-- [ ] update_stock(db, symbol, data: StockUpdate) -> Stock
-- [ ] soft_delete_stock(db, symbol) -> bool
-
-**schema.py:**
-- [ ] StockResponse - Response model
-- [ ] StockCreate - Request for creating
-- [ ] StockUpdate - Request for updating
-- [ ] StockListResponse - Paginated list
-
-**router.py:**
-- [ ] GET /stocks - List stocks
-- [ ] GET /stocks/{symbol} - Get single stock
-- [ ] POST /stocks - Create stock
-- [ ] PATCH /stocks/{symbol} - Update stock
-- [ ] DELETE /stocks/{symbol} - Soft delete
-
-### Constraints
-
-- Symbol format: Taiwan stocks use `{code}.TW` (e.g., "2330.TW")
-- Price precision: 2 decimal places
-- Soft delete required (no hard delete)
+- Follow domain-driven module structure: `src/watchlists/`
+- Use soft delete for all deletions
+- First watchlist created should be set as default
+- Prevent duplicate stocks in the same watchlist
+- Validate that stock exists and is active before adding
 
 ## History
+
+- 2026-05-01: WatchList Implementation
+  - Created SQLAlchemy models: Watchlist, WatchlistStock (junction table)
+  - Added Alembic migration with proper indexes and partial unique constraints
+  - Implemented WatchlistService with full CRUD operations
+  - Added REST endpoints: GET/POST /watchlists, GET/PATCH/DELETE /watchlists/{id}
+  - Added stock management: POST/DELETE/PATCH /watchlists/{id}/stocks/{stock_id}
+  - Created Pydantic schemas: WatchlistCreate, WatchlistUpdate, WatchlistStockAdd, WatchlistStockUpdate
+  - Wrote 13 unit tests for watchlists router
+  - Updated API documentation with Watchlists API section
+  - All 59 tests passing
+
+- 2026-05-01: StockTable Implementation
+  - Created SQLAlchemy Stock model with symbol, name, current_price, calculated_indicators
+  - Added Alembic migration with unique index on symbol and index on is_active
+  - Implemented StockService with CRUD operations and soft delete
+  - Added REST endpoints: GET /stocks, GET /stocks/{symbol}, POST /stocks, PATCH /stocks/{symbol}, DELETE /stocks/{symbol}
+  - Created Pydantic schemas: StockResponse, StockCreate, StockUpdate
+  - Wrote 12 unit tests for stocks router
+  - Updated API documentation with Stocks API section
+  - All 46 tests passing
 
 - 2026-04-30: Users & Auth Tables Update
   - Added display_name, picture_url, quota, subscription_status to users table

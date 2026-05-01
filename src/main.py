@@ -7,6 +7,7 @@ from src.response import Response
 from src.users.router import router as users_router
 from src.auth.router import router as auth_router
 from src.stocks.router import router as stocks_router
+from src.watchlists.router import router as watchlists_router
 
 # 建立 FastAPI 應用
 app = FastAPI(
@@ -33,3 +34,4 @@ async def biz_exception_handler(request: Request, exc: BizException):
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(stocks_router)
+app.include_router(watchlists_router)
