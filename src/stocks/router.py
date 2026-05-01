@@ -1,43 +1,87 @@
 """Stock API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_db
 from src.response import Response
 from src.stocks import service
-from src.stocks.schema import StockCreate, StockResponse, StockUpdate
+from src.stocks.schema import StockCreate, StockListResponse, StockResponse, StockUpdate
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
 
 @router.get(
     "",
-    response_model=Response[list[StockResponse]],
+    response_model=Response[StockListResponse],
     summary="取得股票列表",
-    description="取得所有股票列表，可選擇只顯示活躍股票",
+    description="取得所有股票列表（支援 Keyset 分頁）",
 )
 async def list_stocks(
     db: AsyncSession = Depends(get_db),
     is_active: bool | None = None,
-    limit: int = 100,
-    offset: int = 0,
-) -> Response[list[StockResponse]]:
+    cursor: Optional[int] = Query(None, description="分頁游標（上一頁最後一筆的 ID）"),
+    limit: int = Query(100, ge=1, le=100, description="每頁數量"),
+) -> Response[StockListResponse]:
     """List all stocks.
 
     Args:
         db: Database session
         is_active: Filter by active status
-        limit: Maximum number of results
-        offset: Offset for pagination
+        cursor: Pagination cursor
+        limit: Items per page
 
     Returns:
-        Response[list[StockResponse]]: List of stocks
+        Response[StockListResponse]: List of stocks with pagination info
     """
-    stocks = await service.StockService.get_stocks(
-        db, is_active=is_active, limit=limit, offset=offset
+    stocks, next_cursor = await service.StockService.get_stocks(
+        db, is_active=is_active, cursor=cursor, limit=limit
     )
-    return Response(data=[StockResponse.model_validate(s) for s in stocks])
+    return Response(
+        data=StockListResponse(
+            data=[StockResponse.model_validate(s) for s in stocks],
+            next_cursor=next_cursor,
+            has_more=next_cursor is not None,
+        )
+    )
+
+
+@router.get(
+    "/search",
+    response_model=Response[StockListResponse],
+    summary="搜索股票",
+    description="根據股票代碼或名稱搜索股票（支援 Keyset 分頁）",
+)
+async def search_stocks(
+    q: str = Query(..., min_length=1, description="搜索關鍵字（匹配代碼或名稱）"),
+    db: AsyncSession = Depends(get_db),
+    cursor: Optional[int] = Query(None, description="分頁游標（上一頁最後一筆的 ID）"),
+    limit: int = Query(100, ge=1, le=100, description="每頁數量"),
+) -> Response[StockListResponse]:
+    """Search stocks by symbol or name.
+
+    Args:
+        q: Search query (matches symbol or name)
+        db: Database session
+        cursor: Pagination cursor
+        limit: Items per page
+
+    Returns:
+        Response[StockListResponse]: List of matching stocks with pagination info
+    """
+    stocks, next_cursor = await service.StockService.search_stocks(
+        db, query=q, cursor=cursor, limit=limit
+    )
+    return Response(
+        data=StockListResponse(
+            data=[StockResponse.model_validate(s) for s in stocks],
+            next_cursor=next_cursor,
+            has_more=next_cursor is not None,
+        )
+    )
 
 
 @router.get(
@@ -94,14 +138,13 @@ async def create_stock(
     Raises:
         HTTPException: 409 if stock already exists
     """
-    existing = await service.StockService.get_by_symbol(db, data.symbol)
-    if existing:
+    try:
+        stock = await service.StockService.create(db, data)
+    except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Stock already exists: {data.symbol}",
         )
-
-    stock = await service.StockService.create(db, data)
     return Response(data=StockResponse.model_validate(stock))
 
 

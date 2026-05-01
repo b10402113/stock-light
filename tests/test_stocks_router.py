@@ -124,7 +124,36 @@ class TestStocksRouter:
         assert response.status_code == 200
         data = response.json()
         assert data["code"] == 0
-        assert len(data["data"]) == 2
+        assert len(data["data"]["data"]) == 2
+        assert data["data"]["has_more"] is False
+        assert data["data"]["next_cursor"] is None
+
+    @pytest.mark.asyncio
+    async def test_list_stocks_with_pagination(self, client: AsyncClient):
+        """Test listing stocks with keyset pagination"""
+        # Create multiple stocks
+        for i in range(5):
+            await client.post(
+                "/stocks",
+                json={"symbol": f"{2330 + i}.TW", "name": f"股票{i}"},
+            )
+
+        # List stocks with limit
+        response = await client.get("/stocks?limit=2")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["data"]["data"]) == 2
+        assert data["data"]["has_more"] is True
+        assert data["data"]["next_cursor"] is not None
+
+        # Get next page using cursor
+        cursor = data["data"]["next_cursor"]
+        response2 = await client.get(f"/stocks?limit=2&cursor={cursor}")
+
+        assert response2.status_code == 200
+        data2 = response2.json()
+        assert len(data2["data"]["data"]) == 2
 
     @pytest.mark.asyncio
     async def test_list_stocks_filter_active(self, client: AsyncClient):
@@ -144,8 +173,8 @@ class TestStocksRouter:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data["data"]) == 1
-        assert data["data"][0]["symbol"] == "2330.TW"
+        assert len(data["data"]["data"]) == 1
+        assert data["data"]["data"][0]["symbol"] == "2330.TW"
 
     @pytest.mark.asyncio
     async def test_update_stock_success(self, client: AsyncClient):
@@ -204,3 +233,137 @@ class TestStocksRouter:
         response = await client.delete("/stocks/9999.TW")
 
         assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_search_stocks_by_symbol(self, client: AsyncClient):
+        """Test searching stocks by symbol"""
+        # Create stocks
+        await client.post(
+            "/stocks",
+            json={"symbol": "2330.TW", "name": "台積電"},
+        )
+        await client.post(
+            "/stocks",
+            json={"symbol": "2317.TW", "name": "鴻海"},
+        )
+        await client.post(
+            "/stocks",
+            json={"symbol": "2454.TW", "name": "聯發科"},
+        )
+
+        # Search by partial symbol
+        response = await client.get("/stocks/search?q=233")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["code"] == 0
+        assert len(data["data"]["data"]) == 1
+        assert data["data"]["data"][0]["symbol"] == "2330.TW"
+
+    @pytest.mark.asyncio
+    async def test_search_stocks_by_name(self, client: AsyncClient):
+        """Test searching stocks by name"""
+        # Create stocks
+        await client.post(
+            "/stocks",
+            json={"symbol": "2330.TW", "name": "台積電"},
+        )
+        await client.post(
+            "/stocks",
+            json={"symbol": "2317.TW", "name": "鴻海"},
+        )
+
+        # Search by partial name
+        response = await client.get("/stocks/search?q=台積")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["code"] == 0
+        assert len(data["data"]["data"]) == 1
+        assert data["data"]["data"][0]["name"] == "台積電"
+
+    @pytest.mark.asyncio
+    async def test_search_stocks_case_insensitive(self, client: AsyncClient):
+        """Test case-insensitive search"""
+        # Create stock
+        await client.post(
+            "/stocks",
+            json={"symbol": "2330.TW", "name": "台積電"},
+        )
+
+        # Search with lowercase
+        response = await client.get("/stocks/search?q=tw")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["data"]["data"]) == 1
+        assert data["data"]["data"][0]["symbol"] == "2330.TW"
+
+    @pytest.mark.asyncio
+    async def test_search_stocks_no_results(self, client: AsyncClient):
+        """Test search with no matching results"""
+        # Create stock
+        await client.post(
+            "/stocks",
+            json={"symbol": "2330.TW", "name": "台積電"},
+        )
+
+        # Search with non-matching query
+        response = await client.get("/stocks/search?q=AAPL")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["code"] == 0
+        assert len(data["data"]["data"]) == 0
+        assert data["data"]["has_more"] is False
+
+    @pytest.mark.asyncio
+    async def test_search_stocks_with_pagination(self, client: AsyncClient):
+        """Test search with keyset pagination"""
+        # Create multiple stocks with similar symbols
+        for i in range(5):
+            await client.post(
+                "/stocks",
+                json={"symbol": f"{2330 + i}.TW", "name": f"股票{i}"},
+            )
+
+        # Search with limit
+        response = await client.get("/stocks/search?q=23&limit=2")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["data"]["data"]) == 2
+        assert data["data"]["has_more"] is True
+        assert data["data"]["next_cursor"] is not None
+
+        # Get next page
+        cursor = data["data"]["next_cursor"]
+        response2 = await client.get(f"/stocks/search?q=23&limit=2&cursor={cursor}")
+
+        assert response2.status_code == 200
+        data2 = response2.json()
+        assert len(data2["data"]["data"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_search_stocks_multiple_matches(self, client: AsyncClient):
+        """Test search returning multiple matches"""
+        # Create stocks
+        await client.post(
+            "/stocks",
+            json={"symbol": "2330.TW", "name": "台積電"},
+        )
+        await client.post(
+            "/stocks",
+            json={"symbol": "2317.TW", "name": "鴻海"},
+        )
+        await client.post(
+            "/stocks",
+            json={"symbol": "2454.TW", "name": "聯發科"},
+        )
+
+        # Search that matches multiple stocks
+        response = await client.get("/stocks/search?q=2")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["data"]["data"]) == 3
