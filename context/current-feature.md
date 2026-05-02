@@ -1,31 +1,28 @@
-# Current Feature: NotificationHistory
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Create SQLAlchemy NotificationHistory model in `src/subscriptions/model.py`
-- Create Alembic migration with proper indexes and foreign keys
-- Add relationships to User and IndicatorSubscription models
-- Implement NotificationHistoryService with CRUD operations
-- Add API endpoints: GET /notifications/history, GET /notifications/history/{id}
-- Implement keyset pagination on `triggered_at DESC`
-- Write unit tests for notification history functionality
+<!-- Add goals when starting a new feature -->
 
 ## Notes
 
-- Model inherits from `Base` (provides `id`, `created_at`, `updated_at`, `is_deleted`)
-- `user_id`: Integer FK (matches User.id)
-- `indicator_subscription_id`: Integer FK (matches IndicatorSubscription.id)
-- `triggered_value`: Numeric(10, 4) (matches target_value type)
-- `send_status`: String(20) - values: pending, sent, failed
-- `line_message_id`: Nullable String(100)
-- `triggered_at`: DateTime(timezone=True)
-- Keyset pagination uses `triggered_at` as cursor (more meaningful than `id` for history)
+<!-- Add notes and constraints when loading a feature -->
 
 ## History
+
+- 2026-05-02: NotificationHistory API Implementation
+  - Created NotificationHistory model in subscriptions module
+  - Added relationships to User and IndicatorSubscription models
+  - Implemented NotificationHistoryService with CRUD operations
+  - Added API endpoints: GET /notifications/history, GET /notifications/history/{id}
+  - Used keyset pagination on triggered_at DESC
+  - Created Alembic migration with 5 indexes for query optimization
+  - Wrote 15 unit tests (11 service + 4 router tests)
+  - All 96 tests passing
 
 - 2026-05-02: Stock Search API Implementation
   - Added GET /stocks/search endpoint with query parameter `q`
