@@ -1,9 +1,9 @@
-"""IndicatorSubscription model."""
+"""IndicatorSubscription and NotificationHistory models."""
 
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +34,9 @@ class IndicatorSubscription(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="selectin")
     stock: Mapped["Stock"] = relationship("Stock", back_populates="subscriptions", lazy="selectin")
+    notification_histories: Mapped[list["NotificationHistory"]] = relationship(
+        "NotificationHistory", back_populates="indicator_subscription", lazy="selectin"
+    )
 
     __table_args__ = (
         Index("indicator_subscriptions_user_id_idx", "user_id"),
@@ -50,4 +53,37 @@ class IndicatorSubscription(Base):
             unique=True,
             postgresql_where="is_deleted = false",
         ),
+    )
+
+
+class NotificationHistory(Base):
+    """通知歷史表 - 記錄每次通知發送的狀態"""
+
+    __tablename__ = "notification_histories"
+
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+    indicator_subscription_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("indicator_subscriptions.id"), nullable=False
+    )
+    triggered_value: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
+    send_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    line_message_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    triggered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", lazy="selectin")
+    indicator_subscription: Mapped["IndicatorSubscription"] = relationship(
+        "IndicatorSubscription", back_populates="notification_histories", lazy="selectin"
+    )
+
+    __table_args__ = (
+        Index("notification_histories_user_id_idx", "user_id"),
+        Index("notification_histories_indicator_subscription_id_idx", "indicator_subscription_id"),
+        Index("notification_histories_triggered_at_idx", "triggered_at"),
+        Index("notification_histories_send_status_idx", "send_status"),
+        Index("notification_histories_user_triggered_idx", "user_id", text("triggered_at DESC")),
     )

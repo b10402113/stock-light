@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal
 from typing import AsyncGenerator
 
 import pytest
@@ -13,7 +14,8 @@ from src.models.base import Base
 from src.users.model import User  # noqa: F401 - Ensure model is registered with Base
 from src.stocks.model import Stock  # noqa: F401 - Ensure model is registered with Base
 from src.watchlists.model import Watchlist, WatchlistStock  # noqa: F401 - Ensure model is registered with Base
-from src.subscriptions.model import IndicatorSubscription  # noqa: F401 - Ensure model is registered with Base
+from src.subscriptions.model import IndicatorSubscription, NotificationHistory  # noqa: F401 - Ensure model is registered with Base
+import bcrypt
 
 
 # Session-scoped container (sync)
@@ -104,3 +106,56 @@ async def client(db_session: AsyncSession, test_engine) -> AsyncGenerator[AsyncC
         yield ac
 
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def db(db_session: AsyncSession) -> AsyncSession:
+    """Alias for db_session for use in service tests."""
+    return db_session
+
+
+@pytest_asyncio.fixture(scope="function")
+async def test_user_id(db_session: AsyncSession) -> int:
+    """Create a test user and return its ID."""
+    user = User(
+        email="test@example.com",
+        hashed_password=bcrypt.hashpw(b"password123", bcrypt.gensalt()).decode(),
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user.id
+
+
+@pytest_asyncio.fixture(scope="function")
+async def test_stock_id(db_session: AsyncSession) -> int:
+    """Create a test stock and return its ID."""
+    stock = Stock(
+        symbol="2330.TW",
+        name="台積電",
+        is_active=True,
+    )
+    db_session.add(stock)
+    await db_session.commit()
+    await db_session.refresh(stock)
+    return stock.id
+
+
+@pytest_asyncio.fixture(scope="function")
+async def test_subscription_id(
+    db_session: AsyncSession, test_user_id: int, test_stock_id: int
+) -> int:
+    """Create a test subscription and return its ID."""
+    subscription = IndicatorSubscription(
+        user_id=test_user_id,
+        stock_id=test_stock_id,
+        indicator_type="rsi",
+        operator="<",
+        target_value=Decimal("30.0"),
+        is_active=True,
+    )
+    db_session.add(subscription)
+    await db_session.commit()
+    await db_session.refresh(subscription)
+    return subscription.id
