@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class IndicatorType(StrEnum):
@@ -24,6 +24,13 @@ class Operator(StrEnum):
     LTE = "<="
     EQ = "=="
     NEQ = "!="
+
+
+class SendStatus(StrEnum):
+    """通知發送狀態"""
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
 
 
 class IndicatorSubscriptionBase(BaseModel):
@@ -55,6 +62,8 @@ class IndicatorSubscriptionUpdate(BaseModel):
 class IndicatorSubscriptionResponse(BaseModel):
     """Schema for subscription response"""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     stock_id: int
@@ -68,13 +77,33 @@ class IndicatorSubscriptionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class SubscriptionListResponse(BaseModel):
     """Schema for paginated subscription list response"""
 
     data: list[IndicatorSubscriptionResponse]
     next_cursor: Optional[int] = None
+    has_more: bool = False
+
+
+class NotificationHistoryResponse(BaseModel):
+    """Schema for notification history response"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    indicator_subscription_id: int
+    triggered_value: Decimal
+    send_status: str
+    line_message_id: Optional[str] = None
+    triggered_at: datetime
+    created_at: datetime
+
+
+class NotificationHistoryListResponse(BaseModel):
+    """Schema for paginated notification history list response"""
+
+    data: list[NotificationHistoryResponse]
+    next_cursor: Optional[datetime] = None
     has_more: bool = False

@@ -1,12 +1,13 @@
 """Subscription business logic."""
 
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.stocks.model import Stock
-from src.subscriptions.model import IndicatorSubscription
+from src.subscriptions.model import IndicatorSubscription, NotificationHistory
 from src.subscriptions.schema import (
     IndicatorSubscriptionCreate,
     IndicatorSubscriptionUpdate,
@@ -272,6 +273,150 @@ class SubscriptionService:
                 IndicatorSubscription.is_deleted.is_(False),
                 IndicatorSubscription.is_active.is_(True),
             )
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
+
+class NotificationHistoryService:
+    """通知歷史業務邏輯"""
+
+    @staticmethod
+    async def create_log(
+        db: AsyncSession,
+        user_id: int,
+        indicator_subscription_id: int,
+        triggered_value: Decimal,
+    ) -> NotificationHistory:
+        """創建通知歷史記錄.
+
+        Args:
+            db: 資料庫會話
+            user_id: 用戶 ID
+            indicator_subscription_id: 訂閱 ID
+            triggered_value: 觸發值
+
+        Returns:
+            NotificationHistory: 創建後的通知歷史實體
+        """
+        log = NotificationHistory(
+            user_id=user_id,
+            indicator_subscription_id=indicator_subscription_id,
+            triggered_value=triggered_value,
+            send_status="pending",
+            triggered_at=datetime.now(),
+        )
+        db.add(log)
+        await db.commit()
+        await db.refresh(log)
+        return log
+
+    @staticmethod
+    async def get_user_history(
+        db: AsyncSession,
+        user_id: int,
+        cursor: datetime | None = None,
+        limit: int = 20,
+    ) -> tuple[list[NotificationHistory], datetime | None]:
+        """取得用戶通知歷史 (Keyset Pagination on triggered_at DESC).
+
+        Args:
+            db: 資料庫會話
+            user_id: 用戶 ID
+            cursor: 分頁游標 (上一頁最後一筆的 triggered_at)
+            limit: 每頁數量
+
+        Returns:
+            tuple[list[NotificationHistory], datetime | None]: 通知歷史列表和下一頁游標
+        """
+        stmt = (
+            select(NotificationHistory)
+            .where(
+                NotificationHistory.user_id == user_id,
+                NotificationHistory.is_deleted.is_(False),
+            )
+            .order_by(NotificationHistory.triggered_at.desc())
+            .limit(limit)
+        )
+
+        if cursor:
+            stmt = stmt.where(NotificationHistory.triggered_at < cursor)
+
+        result = await db.execute(stmt)
+        histories = list(result.scalars().all())
+
+        next_cursor = None
+        if len(histories) == limit:
+            next_cursor = histories[-1].triggered_at
+
+        return histories, next_cursor
+
+    @staticmethod
+    async def get_by_id(
+        db: AsyncSession, history_id: int
+    ) -> NotificationHistory | None:
+        """根據 ID 取得通知歷史.
+
+        Args:
+            db: 資料庫會話
+            history_id: 通知歷史 ID
+
+        Returns:
+            NotificationHistory | None: 通知歷史實體或 None
+        """
+        stmt = select(NotificationHistory).where(
+            NotificationHistory.id == history_id,
+            NotificationHistory.is_deleted.is_(False),
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def update_status(
+        db: AsyncSession,
+        history: NotificationHistory,
+        send_status: str,
+        line_message_id: str | None = None,
+    ) -> NotificationHistory:
+        """更新通知發送狀態.
+
+        Args:
+            db: 資料庫會話
+            history: 通知歷史實體
+            send_status: 發送狀態 (sent, failed)
+            line_message_id: LINE 訊息 ID
+
+        Returns:
+            NotificationHistory: 更新後的通知歷史實體
+        """
+        history.send_status = send_status
+        if line_message_id:
+            history.line_message_id = line_message_id
+        await db.commit()
+        await db.refresh(history)
+        return history
+
+    @staticmethod
+    async def get_failed_notifications(
+        db: AsyncSession, limit: int = 100
+    ) -> list[NotificationHistory]:
+        """取得發送失敗的通知 (用於重試機制).
+
+        Args:
+            db: 資料庫會話
+            limit: 最大數量
+
+        Returns:
+            list[NotificationHistory]: 失敗通知列表
+        """
+        stmt = (
+            select(NotificationHistory)
+            .where(
+                NotificationHistory.send_status == "failed",
+                NotificationHistory.is_deleted.is_(False),
+            )
+            .order_by(NotificationHistory.triggered_at.asc())
+            .limit(limit)
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())

@@ -3,6 +3,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import CurrentUser
@@ -100,6 +101,11 @@ async def create_subscription(
     """
     try:
         subscription = await service.SubscriptionService.create(db, current_user.id, data)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Subscription already exists",
+        )
     except ValueError as e:
         if "quota" in str(e).lower():
             raise HTTPException(

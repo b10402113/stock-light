@@ -1,12 +1,29 @@
-# Current Feature
+# Current Feature: NotificationHistory
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
+- Create SQLAlchemy NotificationHistory model in `src/subscriptions/model.py`
+- Create Alembic migration with proper indexes and foreign keys
+- Add relationships to User and IndicatorSubscription models
+- Implement NotificationHistoryService with CRUD operations
+- Add API endpoints: GET /notifications/history, GET /notifications/history/{id}
+- Implement keyset pagination on `triggered_at DESC`
+- Write unit tests for notification history functionality
+
 ## Notes
+
+- Model inherits from `Base` (provides `id`, `created_at`, `updated_at`, `is_deleted`)
+- `user_id`: Integer FK (matches User.id)
+- `indicator_subscription_id`: Integer FK (matches IndicatorSubscription.id)
+- `triggered_value`: Numeric(10, 4) (matches target_value type)
+- `send_status`: String(20) - values: pending, sent, failed
+- `line_message_id`: Nullable String(100)
+- `triggered_at`: DateTime(timezone=True)
+- Keyset pagination uses `triggered_at` as cursor (more meaningful than `id` for history)
 
 ## History
 
