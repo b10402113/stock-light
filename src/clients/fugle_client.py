@@ -1,24 +1,23 @@
-"""Fugo API client - only wraps API calls, no business logic."""
+"""Fugle API client using fugle_marketdata SDK - only wraps API calls, no business logic."""
 
-import httpx
+from fugle_marketdata import RestClient, FugleAPIError
 
 from src.config import settings
 from src.clients.base import BaseHTTPClient, get_retry_decorator
-from src.exceptions import ErrorCode
+from src.exceptions import BizException, ErrorCode
 from src.stocks.schema import HistoricalCandle, IntradayCandle, IntradayQuoteResponse
 
 
 class FugoClient(BaseHTTPClient):
-    """Fugo API client for stock market data.
+    """Fugle API client for stock market data.
 
-    This client only wraps API calls - no business logic.
+    This client uses fugle_marketdata RestClient - no business logic.
     All methods raise BizException on API errors.
     """
 
     def __init__(
         self,
         api_key: str | None = None,
-        base_url: str | None = None,
         timeout: int | None = None,
         max_retries: int | None = None,
     ):
@@ -27,11 +26,28 @@ class FugoClient(BaseHTTPClient):
             max_retries=max_retries or settings.FUGO_MAX_RETRIES,
         )
         self.api_key = api_key or settings.FUGO_API_KEY
-        self.base_url = base_url or settings.FUGO_BASE_URL
+        self._client = RestClient(api_key=self.api_key)
+        self.stock = self._client.stock
 
-    def _get_headers(self) -> dict[str, str]:
-        """Get API headers with authentication."""
-        return {"X-API-KEY": self.api_key}
+    def _handle_fugle_error(self, e: FugleAPIError) -> None:
+        """Convert FugleAPIError to BizException.
+
+        Args:
+            e: FugleAPIError exception
+
+        Raises:
+            BizException: Converted exception
+        """
+        if e.status_code and e.status_code >= 500:
+            raise BizException(
+                ErrorCode.FUGO_API_ERROR,
+                f"Fugle API server error: {e.status_code} - {e.message}",
+            )
+        else:
+            raise BizException(
+                ErrorCode.FUGO_API_ERROR,
+                f"Fugle API error: {e.message}",
+            )
 
     @get_retry_decorator(max_retries=3)
     async def get_intraday_quote(self, symbol: str) -> IntradayQuoteResponse:
@@ -46,14 +62,12 @@ class FugoClient(BaseHTTPClient):
         Raises:
             BizException: On API errors
         """
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            url = f"{self.base_url}/intraday/quote/{symbol}"
-            response = await client.get(url, headers=self._get_headers())
-
-            if response.status_code != 200:
-                self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
-
-            return IntradayQuoteResponse(**response.json())
+        try:
+            # RestClient is synchronous, run in threadpool if needed
+            data = self.stock.intraday.quote(symbol=symbol)
+            return IntradayQuoteResponse(**data)
+        except FugleAPIError as e:
+            self._handle_fugle_error(e)
 
     @get_retry_decorator(max_retries=3)
     async def get_intraday_candles(self, symbol: str) -> list[IntradayCandle]:
@@ -68,14 +82,8 @@ class FugoClient(BaseHTTPClient):
         Raises:
             BizException: On API errors
         """
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            url = f"{self.base_url}/intraday/candles/{symbol}"
-            response = await client.get(url, headers=self._get_headers())
-
-            if response.status_code != 200:
-                self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
-
-            data = response.json()
+        try:
+            data = self.stock.intraday.candles(symbol=symbol)
             # Handle different response formats
             if isinstance(data, list):
                 candles = data
@@ -83,8 +91,9 @@ class FugoClient(BaseHTTPClient):
                 candles = data.get("data", data.get("candles", []))
             else:
                 candles = []
-
             return [IntradayCandle(**c) for c in candles]
+        except FugleAPIError as e:
+            self._handle_fugle_error(e)
 
     @get_retry_decorator(max_retries=3)
     async def get_historical_candles(
@@ -106,19 +115,12 @@ class FugoClient(BaseHTTPClient):
         Raises:
             BizException: On API errors
         """
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            url = f"{self.base_url}/historical/candles/{symbol}"
-            params = {"from": from_date, "to": to_date}
-            response = await client.get(
-                url,
-                headers=self._get_headers(),
-                params=params,
+        try:
+            data = self.stock.historical.candles(
+                symbol=symbol,
+                from_=from_date,
+                to=to_date,
             )
-
-            if response.status_code != 200:
-                self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
-
-            data = response.json()
             # Handle different response formats
             if isinstance(data, list):
                 candles = data
@@ -126,5 +128,6 @@ class FugoClient(BaseHTTPClient):
                 candles = data.get("data", data.get("candles", []))
             else:
                 candles = []
-
             return [HistoricalCandle(**c) for c in candles]
+        except FugleAPIError as e:
+            self._handle_fugle_error(e)
