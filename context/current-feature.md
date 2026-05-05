@@ -1,76 +1,29 @@
-# Current Feature - Fugo API Client Implementation
+# Current Feature
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Implement FugoClient class in `src/stocks/client.py` to encapsulate Fugo API calls
-- Create async method to fetch latest stock information by symbol (intraday quote)
-- Create async method to fetch intraday OHLC candles
-- Create async method to fetch historical candles
-- Follow project architecture: client.py only wraps API calls, no business logic
-- Use httpx.AsyncClient for async HTTP requests
-- Use proper error handling and timeout configuration
-- Add retry logic using tenacity library
-- Make client configurable via Settings (API key, timeout, base URL)
-- Write unit tests for FugoClient using mocked httpx responses
+<!-- Goals will be populated when starting a new feature -->
 
 ## Notes
 
-### API Details (from test_fugo_api.py)
-
-- **Base URL**: `https://api.fugle.tw/marketdata/v1.0/stock`
-- **Authentication**: `X-API-KEY` header (not query parameter)
-- **API Key**: Configured in Settings as `FUGO_API_KEY`
-
-### Endpoints
-
-1. **Intraday Quote**: `/intraday/quote/{symbol}`
-   - Returns: symbol, name, lastPrice, change, changePercent, openPrice, highPrice, lowPrice, previousClose, total.tradeVolume, total.tradeValue, isClose
-
-2. **Intraday Candles**: `/intraday/candles/{symbol}`
-   - Returns: List of OHLC candles for current trading day
-
-3. **Historical Candles**: `/historical/candles/{symbol}`
-   - Parameters: `from` (date), `to` (date)
-   - Returns: List of historical OHLC candles
-
-### Architecture Constraints
-
-From CLAUDE.md:
-
-- **client.py rule**: "Wrap external API calls (Fugo, LINE)" - no business logic
-- **Forbidden in client**: "Business logic"
-- **Domain self-containment**: stocks/ module owns its client
-- **Layer responsibilities**: client can be called by service, never by router
-
-### Design Principles
-
-- Use httpx.AsyncClient with connection pooling
-- Set reasonable timeout (default 10 seconds)
-- Use tenacity for retry with exponential backoff
-- Raise custom exceptions for API errors (map HTTP status to domain errors)
-- Return typed responses using Pydantic models
-- Keep methods pure - just API calls, no data transformation
-
-### Retry Strategy
-
-- Retry on: 5xx errors, network timeouts, connection errors
-- Max retries: 3
-- Backoff: exponential with jitter
-- Don't retry on: 4xx errors (client errors)
-
-### Response Models
-
-Create Pydantic models in `src/stocks/schema.py` for API responses:
-
-- `IntradayQuoteResponse`
-- `IntradayCandle`
-- `HistoricalCandle`
+<!-- Notes will be populated when starting a new feature -->
 
 ## History
+
+- 2026-05-05: Fugo API Client Implementation
+  - Created FugoClient class in src/stocks/client.py
+  - Implemented async methods: get_intraday_quote, get_intraday_candles, get_historical_candles
+  - Added Pydantic response models: IntradayQuoteResponse, IntradayCandle, HistoricalCandle
+  - Configured via Settings: FUGO_BASE_URL, FUGO_TIMEOUT (10s), FUGO_MAX_RETRIES (3)
+  - Retry logic with tenacity: exponential backoff with jitter, retry on 5xx errors
+  - Raise BizException (FUGO_API_ERROR) on API errors, no retry on 4xx
+  - Added tenacity>=8.0.0 to requirements.txt
+  - Wrote 10 unit tests with mocked httpx responses
+  - All 105 tests passing
 
 - 2026-05-02: NotificationHistory API Implementation
   - Created NotificationHistory model in subscriptions module
