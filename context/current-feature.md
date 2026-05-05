@@ -1,23 +1,16 @@
-# Current Feature: Fugle Single Symbol Ticker Lookup
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Add `get_ticker` method to FugoClient using `GET /intraday/ticker/{symbol}` endpoint for single symbol lookup
-- Modify `search_stocks` in StockService:
-  - Remove logger statements (lines 127-141)
-  - Use `get_ticker` for single symbol lookup instead of fetching all TSE/OTC tickers
-  - Filter by symbol only when using Fugle fallback (not symbol AND name)
+<!-- Add feature goals here when starting a new feature -->
 
 ## Notes
 
-- TickerResponse schema already exists in src/stocks/schema.py
-- Current implementation fetches all tickers from both markets then filters - inefficient for single symbol search
-- The new approach will be more efficient: directly query single ticker from Fugle API
-- This aligns with the Fugle API pattern: `/intraday/ticker/{symbol}` for single symbol metadata
+<!-- Add implementation notes and constraints here -->
 
 ## History
 
@@ -49,8 +42,6 @@ Complete
     - test_search_stocks_database_first_no_fugle_call: Tests that API not called when database has results
   - Updated API documentation with fallback strategy details
   - All 21 stock router tests passing
-
-## History
 
 - 2026-05-05: Fugo API Client Implementation
   - Created FugoClient class in src/stocks/client.py
