@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from src.clients.fugle_client import FugoClient
 from src.exceptions import BizException, ErrorCode
-from src.stocks.client import FugoClient
 from src.stocks.schema import HistoricalCandle, IntradayCandle, IntradayQuoteResponse
 
 

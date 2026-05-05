@@ -1,19 +1,14 @@
 """Fugo API client - only wraps API calls, no business logic."""
 
 import httpx
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential_jitter,
-)
 
 from src.config import settings
-from src.exceptions import BizException, ErrorCode
+from src.clients.base import BaseHTTPClient, get_retry_decorator
+from src.exceptions import ErrorCode
 from src.stocks.schema import HistoricalCandle, IntradayCandle, IntradayQuoteResponse
 
 
-class FugoClient:
+class FugoClient(BaseHTTPClient):
     """Fugo API client for stock market data.
 
     This client only wraps API calls - no business logic.
@@ -27,35 +22,18 @@ class FugoClient:
         timeout: int | None = None,
         max_retries: int | None = None,
     ):
+        super().__init__(
+            timeout=timeout or settings.FUGO_TIMEOUT,
+            max_retries=max_retries or settings.FUGO_MAX_RETRIES,
+        )
         self.api_key = api_key or settings.FUGO_API_KEY
         self.base_url = base_url or settings.FUGO_BASE_URL
-        self.timeout = timeout or settings.FUGO_TIMEOUT
-        self.max_retries = max_retries or settings.FUGO_MAX_RETRIES
 
     def _get_headers(self) -> dict[str, str]:
         """Get API headers with authentication."""
         return {"X-API-KEY": self.api_key}
 
-    def _handle_error(self, response: httpx.Response) -> None:
-        """Handle API error responses."""
-        if response.status_code >= 500:
-            raise BizException(
-                ErrorCode.FUGO_API_ERROR,
-                f"Fugo API server error: {response.status_code}",
-            )
-        elif response.status_code >= 400:
-            # Client errors - don't retry
-            raise BizException(
-                ErrorCode.FUGO_API_ERROR,
-                f"Fugo API client error: {response.status_code} - {response.text}",
-            )
-
-    @retry(
-        retry=retry_if_exception_type(BizException),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential_jitter(initial=1, max=10),
-        reraise=True,
-    )
+    @get_retry_decorator(max_retries=3)
     async def get_intraday_quote(self, symbol: str) -> IntradayQuoteResponse:
         """Get latest stock information by symbol (intraday quote).
 
@@ -73,16 +51,11 @@ class FugoClient:
             response = await client.get(url, headers=self._get_headers())
 
             if response.status_code != 200:
-                self._handle_error(response)
+                self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
 
             return IntradayQuoteResponse(**response.json())
 
-    @retry(
-        retry=retry_if_exception_type(BizException),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential_jitter(initial=1, max=10),
-        reraise=True,
-    )
+    @get_retry_decorator(max_retries=3)
     async def get_intraday_candles(self, symbol: str) -> list[IntradayCandle]:
         """Get intraday OHLC candles for current trading day.
 
@@ -100,7 +73,7 @@ class FugoClient:
             response = await client.get(url, headers=self._get_headers())
 
             if response.status_code != 200:
-                self._handle_error(response)
+                self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
 
             data = response.json()
             # Handle different response formats
@@ -113,12 +86,7 @@ class FugoClient:
 
             return [IntradayCandle(**c) for c in candles]
 
-    @retry(
-        retry=retry_if_exception_type(BizException),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential_jitter(initial=1, max=10),
-        reraise=True,
-    )
+    @get_retry_decorator(max_retries=3)
     async def get_historical_candles(
         self,
         symbol: str,
@@ -148,7 +116,7 @@ class FugoClient:
             )
 
             if response.status_code != 200:
-                self._handle_error(response)
+                self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
 
             data = response.json()
             # Handle different response formats
