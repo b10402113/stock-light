@@ -1,16 +1,54 @@
-# Current Feature
+# Current Feature: Fugle Single Symbol Ticker Lookup
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-<!-- Goals will be populated when starting a new feature -->
+- Add `get_ticker` method to FugoClient using `GET /intraday/ticker/{symbol}` endpoint for single symbol lookup
+- Modify `search_stocks` in StockService:
+  - Remove logger statements (lines 127-141)
+  - Use `get_ticker` for single symbol lookup instead of fetching all TSE/OTC tickers
+  - Filter by symbol only when using Fugle fallback (not symbol AND name)
 
 ## Notes
 
-<!-- Notes will be populated when starting a new feature -->
+- TickerResponse schema already exists in src/stocks/schema.py
+- Current implementation fetches all tickers from both markets then filters - inefficient for single symbol search
+- The new approach will be more efficient: directly query single ticker from Fugle API
+- This aligns with the Fugle API pattern: `/intraday/ticker/{symbol}` for single symbol metadata
+
+## History
+
+- 2026-05-06: Fugle Single Symbol Ticker Lookup Implementation
+  - Added get_ticker method to FugoClient using GET /intraday/ticker/{symbol} endpoint
+  - Modified search_stocks in StockService:
+    - Removed logger statements
+    - Changed from fetching all TSE/OTC tickers to single ticker lookup
+    - Filter by symbol only when using Fugle fallback
+  - Updated tests to use get_ticker instead of get_tickers
+  - Updated API documentation with new fallback strategy
+  - All 21 stock router tests passing
+
+- 2026-05-06: Stock Search API Fallback Strategy Implementation
+  - Added get_tickers method to FugoClient using fugle_marketdata SDK intraday.tickers endpoint
+  - Created TickerResponse Pydantic schema for Fugle ticker data
+  - Implemented fallback logic in StockService.search_stocks:
+    - Database-first search
+    - If no results, query Fugle API for TSE and OTC markets
+    - Filter results by query (case-insensitive)
+    - Persist matching stocks to database
+    - Gracefully handle API failures (returns empty list)
+  - Added fugle_client dependency injection to router
+  - Updated router to pass fugle_client to service method
+  - Added pytest-mock>=3.12.0 to requirements.txt
+  - Added fugle-marketdata>=0.1.0 to requirements.txt
+  - Wrote 2 unit tests for fallback behavior:
+    - test_search_stocks_fugle_fallback: Tests API fallback when database empty
+    - test_search_stocks_database_first_no_fugle_call: Tests that API not called when database has results
+  - Updated API documentation with fallback strategy details
+  - All 21 stock router tests passing
 
 ## History
 

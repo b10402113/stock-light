@@ -5,7 +5,7 @@ import httpx
 from src.config import settings
 from src.clients.base import BaseHTTPClient, get_retry_decorator
 from src.exceptions import ErrorCode
-from src.stocks.schema import HistoricalCandle, IntradayCandle, IntradayQuoteResponse
+from src.stocks.schema import HistoricalCandle, IntradayCandle, IntradayQuoteResponse, TickerResponse
 
 
 class FugoClient(BaseHTTPClient):
@@ -128,3 +128,28 @@ class FugoClient(BaseHTTPClient):
                 candles = []
 
             return [HistoricalCandle(**c) for c in candles]
+
+    @get_retry_decorator(max_retries=3)
+    async def get_ticker(self, symbol: str) -> TickerResponse | None:
+        """Get ticker metadata for a single symbol.
+
+        Args:
+            symbol: Stock symbol (e.g., "2330")
+
+        Returns:
+            TickerResponse with symbol and name, or None if not found
+
+        Raises:
+            BizException: On API errors (except 404)
+        """
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            url = f"{self.base_url}/intraday/ticker/{symbol}"
+            response = await client.get(url, headers=self._get_headers())
+
+            if response.status_code == 404:
+                return None
+
+            if response.status_code != 200:
+                self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
+
+            return TickerResponse(**response.json())

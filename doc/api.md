@@ -297,7 +297,7 @@ Get a list of all stocks with optional filtering.
 
 ### Search Stocks
 
-Search stocks by symbol or name with keyset pagination.
+Search stocks by symbol or name with keyset pagination. Implements a database-first fallback strategy: searches the local database first, and if no results are found, queries the Fugle API for a single ticker by symbol lookup.
 
 **Endpoint**: `GET /stocks/search`
 
@@ -343,8 +343,14 @@ Search stocks by symbol or name with keyset pagination.
 **Features**:
 
 - Case-insensitive partial matching
-- Searches both `symbol` and `name` fields (OR logic)
+- Searches both `symbol` and `name` fields in database (OR logic)
 - Keyset pagination for efficient large result sets
+- **Fallback Strategy**: Database-first with single ticker lookup
+  - First searches local database
+  - If no results found, queries Fugle API for single ticker by symbol
+  - Automatically persists new stock data to database
+  - More efficient than fetching all market tickers
+  - Gracefully handles API failures (returns empty results on error)
 
 **Example Searches**:
 
@@ -353,6 +359,12 @@ Search stocks by symbol or name with keyset pagination.
 | `2330`  | Stocks with "2330" in symbol or name |
 | `台積`  | Stocks with "台積" in symbol or name |
 | `tw`    | All stocks with ".TW" suffix         |
+
+**Fallback Behavior Examples**:
+
+- **Database has results**: Returns immediately, no Fugle API call
+- **Database empty, Fugle has ticker**: Fetches single ticker by symbol, saves to database, returns results
+- **Ticker not found or API failure**: Returns empty result set
 
 ---
 
@@ -1401,6 +1413,14 @@ Get a single notification history entry by ID.
 ---
 
 ## Changelog
+
+### v1.6.0 (2026-05-06)
+
+- Improved Stock Search API fallback strategy
+- Changed from fetching all TSE/OTC tickers to single ticker lookup
+- Added `GET /intraday/ticker/{symbol}` endpoint to FugoClient
+- More efficient API usage: queries only the needed ticker
+- Reduced latency and API call volume for single symbol searches
 
 ### v1.5.0 (2026-05-02)
 

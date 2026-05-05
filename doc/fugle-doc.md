@@ -1,0 +1,65 @@
+# Fugle Developer Docs
+
+> Fugle Developer Docs
+
+## Docs
+
+- [以 LLM 輔助 API 串接開發](https://developer.fugle.tw/docs/data/build-with-llm.md): 利用大型語言模型協助完成 API 的整合與實作。
+- [錯誤代碼](https://developer.fugle.tw/docs/data/error_codes.md): | 錯誤代碼 | 錯誤內容 | 說明 |
+- [Corporate Actions Capital Changes](https://developer.fugle.tw/docs/data/http-api/corporate-actions/capital-changes.md): 上市櫃股票及 ETF 之資本變動資料（面額變更、減資、分割）
+- [Corporate Actions Dividends](https://developer.fugle.tw/docs/data/http-api/corporate-actions/dividends.md): 上市、櫃公司除權息資料 (含增資)
+- [Corporate Actions Listing Applicants](https://developer.fugle.tw/docs/data/http-api/corporate-actions/listing-applicants.md): 上市、櫃公司上市申請資料
+- [開始使用](https://developer.fugle.tw/docs/data/http-api/getting-started.md): 富果行情 REST API 提供開發者友善的 Web API 服務。您可以查詢台股的日內行情、行情快照與歷史行情等數據。
+- [Historical Candles](https://developer.fugle.tw/docs/data/http-api/historical/candles.md): 取得 1 年內的上市櫃歷史股價（依代碼查詢），個股資料區間最遠可回溯至 2010 年，指數部分最遠可回溯至 2015 年！
+- [Historical Stats](https://developer.fugle.tw/docs/data/http-api/historical/stats.md): 取得近 52 週股價數據（依代碼查詢）
+- [Intraday Candles](https://developer.fugle.tw/docs/data/http-api/intraday/candles.md): 取得股票價格Ｋ線（依代碼查詢）
+- [Intraday Quote](https://developer.fugle.tw/docs/data/http-api/intraday/quote.md): 取得股票即時報價（依代碼查詢）
+- [Intraday Ticker](https://developer.fugle.tw/docs/data/http-api/intraday/ticker.md): 取得股票基本資料（依代碼查詢）
+- [Intraday Tickers](https://developer.fugle.tw/docs/data/http-api/intraday/tickers.md): 取得股票或指數列表（依條件查詢）
+- [Intraday Trades](https://developer.fugle.tw/docs/data/http-api/intraday/trades.md): 取得股票成交明細（依代碼查詢）
+- [Intraday Volumes](https://developer.fugle.tw/docs/data/http-api/intraday/volumes.md): 取得股票分價量表（依代碼查詢）
+- [Snapshot Actives](https://developer.fugle.tw/docs/data/http-api/snapshot/actives.md): 取得股票成交量值排行（依市場別），系統更新頻率為每五秒更新一次。
+- [Snapshot Movers](https://developer.fugle.tw/docs/data/http-api/snapshot/movers.md): 取得股票漲跌幅排行（依市場別），系統更新頻率為每五秒更新一次。
+- [Snapshot Quotes](https://developer.fugle.tw/docs/data/http-api/snapshot/quotes.md): 取得股票行情快照（依市場別），系統更新頻率為每五秒更新一次。
+- [Technical Bbands BETA](https://developer.fugle.tw/docs/data/http-api/technical/bb.md): 取得特定股票在指定時間範圍內的布林通通 (Bollinger Bands)
+- [Technical KDJ BETA](https://developer.fugle.tw/docs/data/http-api/technical/kdj.md): 取得特定股票在指定時間範圍內的隨機指標 (KDJ)
+- [Technical MACD BETA](https://developer.fugle.tw/docs/data/http-api/technical/macd.md): 取得特定股票在指定時間範圍內的指數平滑異同移動平均線 (MACD)
+- [Technical RSI BETA](https://developer.fugle.tw/docs/data/http-api/technical/rsi.md): 取得特定股票在指定時間範圍內的相對強弱指標 (RSI)
+- [Technical SMA BETA](https://developer.fugle.tw/docs/data/http-api/technical/sma.md): 取得特定股票在指定時間範圍內的簡單移動平均 (SMA)
+- [富果行情 API v1.0](https://developer.fugle.tw/docs/data/intro.md): 富果行情 API 是由時報資訊與 Fugle 技術團隊開發提供。 即時行情資料來源為臺灣證券交易所、證券櫃檯買賣中心、臺灣期貨交易所。請您詳閱相關使用規範與聲明。
+- [版本遷移指南](https://developer.fugle.tw/docs/data/migration-guide.md): 本文件將引導您將現有的行情 API v0.3 版本升級至最新的 v1.0 版本。
+- [服務狀態](https://developer.fugle.tw/docs/data/status.md)
+- [開始使用](https://developer.fugle.tw/docs/data/websocket-api/getting-started.md): 富果行情 WebSocket API 提供台股即時行情服務。透過 WebSocket API 可以滿足您想要接收即時行情的需求。
+- [Aggregates](https://developer.fugle.tw/docs/data/websocket-api/market-data-channels/aggregates.md): 接收訂閱股票聚合數據的行情資訊
+- [Books](https://developer.fugle.tw/docs/data/websocket-api/market-data-channels/books.md): 接收訂閱股票最新最佳五檔委買委賣資訊
+- [Candles](https://developer.fugle.tw/docs/data/websocket-api/market-data-channels/candles.md): 接收訂閱股票最新分鐘Ｋ
+- [Indices](https://developer.fugle.tw/docs/data/websocket-api/market-data-channels/indices.md): 接收訂閱股票最新指數行情資料
+- [Trades](https://developer.fugle.tw/docs/data/websocket-api/market-data-channels/trades.md): 接收訂閱股票最新成交資訊
+- [開始使用 BETA](https://developer.fugle.tw/docs/data-futopt/http-api/getting-started.md): 富果行情 REST API 提供開發者友善的 Web API 服務。您可以查詢台股期貨選擇權的日內行情與歷史行情等數據。
+- [Intraday Candles BETA](https://developer.fugle.tw/docs/data-futopt/http-api/intraday/candles.md): 取得期權價格Ｋ線（依商品查詢）
+- [Intraday Products BETA](https://developer.fugle.tw/docs/data-futopt/http-api/intraday/products.md): 取得期權契約清單（依條件查詢）
+- [Intraday Quote BETA](https://developer.fugle.tw/docs/data-futopt/http-api/intraday/quote.md): 取得期權即時報價（依商品代碼查詢）
+- [Intraday Ticker BETA](https://developer.fugle.tw/docs/data-futopt/http-api/intraday/ticker.md): 取得期權基本資料（依商品代碼查詢）
+- [Intraday Tickers BETA](https://developer.fugle.tw/docs/data-futopt/http-api/intraday/tickers.md): 取得期權可交易商品列表（依條件查詢）
+- [Intraday Trades BETA](https://developer.fugle.tw/docs/data-futopt/http-api/intraday/trades.md): 取得期權成交明細（依代碼查詢）
+- [Intraday Volumes BETA](https://developer.fugle.tw/docs/data-futopt/http-api/intraday/volumes.md): 取得期權分價量表（依代碼查詢）
+- [富果期權行情 API BETA](https://developer.fugle.tw/docs/data-futopt/intro.md): 富果期權行情 API 是由時報資訊與 Fugle 技術團隊開發提供。 期權即時行情資料來源為臺灣期貨交易所，請您詳閱相關使用規範與聲明。
+- [開始使用 BETA](https://developer.fugle.tw/docs/data-futopt/websocket-api/getting-started.md): 富果行情 WebSocket API 提供台股即時行情服務。透過 WebSocket API 可以滿足您想要接收即時行情的需求。
+- [Aggregates BETA](https://developer.fugle.tw/docs/data-futopt/websocket-api/market-data-channels/aggregates.md): 接收訂閱期權聚合數據的行情資訊
+- [Books BETA](https://developer.fugle.tw/docs/data-futopt/websocket-api/market-data-channels/books.md): 接收訂閱期權商品最新最佳五檔委買委賣資訊
+- [Candles BETA](https://developer.fugle.tw/docs/data-futopt/websocket-api/market-data-channels/candles.md): 接收訂閱期權商品最新分鐘Ｋ
+- [Trades BETA](https://developer.fugle.tw/docs/data-futopt/websocket-api/market-data-channels/trades.md): 接收訂閱期權商品最新成交資訊
+- [常見問答](https://developer.fugle.tw/docs/faq/intro.md): 註冊 <a href="https://www.fugle.tw/account/register?referrer=api"
+- [金鑰申請及管理](https://developer.fugle.tw/docs/key.md)
+- [行情方案及價格](https://developer.fugle.tw/docs/pricing.md): 個人台股行情方案價格及對應權限如下
+- [行情方案及價格](https://developer.fugle.tw/docs/pricing-version-0.3.md): 申請玉山證券富果帳戶即可免費使用本服務
+- [最佳實踐](https://developer.fugle.tw/docs/trading/best_practice.md): 探討在實務上的最佳作法，以協助您打造一個高效、安全且可靠的程式下單系統。
+- [合作券商](https://developer.fugle.tw/docs/trading/brokerage_partner.md): 我們與多家知名券商建立合作關係，共同提供優質的金融服務。
+- [富果交易 API](https://developer.fugle.tw/docs/trading/intro.md): ⚠️ 此套件已停止更新 富果交易 API 於 2025/11 不再更新，下單需求請轉移到合作券商 SDK
+- [事前準備](https://developer.fugle.tw/docs/trading/prerequisites.md): 事前準備的步驟
+- [快速開始](https://developer.fugle.tw/docs/trading/quick_start.md): 可參照文中內容快速開始程式交易。
+- [Changelog](https://developer.fugle.tw/docs/trading/reference/changelog.md): Python
+- [錯誤代碼](https://developer.fugle.tw/docs/trading/reference/error_codes.md): 錯誤代碼表
+- [Node.js](https://developer.fugle.tw/docs/trading/reference/nodejs.md): 此類別代表使用 node.js 的 SDK 方法
+- [Python](https://developer.fugle.tw/docs/trading/reference/python.md): 登入功能
+- [使用限制](https://developer.fugle.tw/docs/trading/reference/rate_limit.md): API 速率限制

@@ -23,6 +23,13 @@ class IntradayQuoteResponse(BaseModel):
     isClose: bool = Field(..., description="是否收盤")
 
 
+class TickerResponse(BaseModel):
+    """Fugle ticker response for stock list."""
+
+    symbol: str = Field(..., description="股票代碼")
+    name: str = Field(..., description="股票名稱")
+
+
 class IntradayCandle(BaseModel):
     """Fugo intraday OHLC candle."""
 

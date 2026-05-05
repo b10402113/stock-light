@@ -367,3 +367,50 @@ class TestStocksRouter:
         assert response.status_code == 200
         data = response.json()
         assert len(data["data"]["data"]) == 3
+
+    @pytest.mark.asyncio
+    async def test_search_stocks_fugle_fallback(self, client: AsyncClient, mocker):
+        """Test search with Fugle API fallback when database has no results"""
+        from src.stocks.schema import TickerResponse
+
+        # Mock FugleClient.get_ticker to return test data
+        mock_ticker = TickerResponse(symbol="1301", name="台塑")
+
+        # Patch the FugoClient class
+        mock_client_class = mocker.patch("src.stocks.router.FugoClient")
+        mock_client_instance = mock_client_class.return_value
+
+        # Setup async mock for get_ticker
+        mock_client_instance.get_ticker = mocker.AsyncMock(return_value=mock_ticker)
+
+        # Search for a stock not in database
+        response = await client.get("/stocks/search?q=1301")
+
+        assert response.status_code == 200
+        data = response.json()
+        # Should return results from Fugle API (after storing in database)
+        assert len(data["data"]["data"]) >= 1
+        assert data["data"]["data"][0]["symbol"] == "1301.TW"
+
+    @pytest.mark.asyncio
+    async def test_search_stocks_database_first_no_fugle_call(self, client: AsyncClient, mocker):
+        """Test that Fugle API is not called when database has results"""
+        # Create stock in database
+        await client.post(
+            "/stocks",
+            json={"symbol": "2330.TW", "name": "台積電"},
+        )
+
+        # Mock FugleClient to track if it's called
+        mock_client_class = mocker.patch("src.stocks.router.FugoClient")
+        mock_client_instance = mock_client_class.return_value
+        mock_client_instance.get_ticker = mocker.AsyncMock()
+
+        # Search for stock that exists in database
+        response = await client.get("/stocks/search?q=2330")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["data"]["data"]) == 1
+        # Fugle API should not be called since database has results
+        mock_client_instance.get_ticker.assert_not_called()
