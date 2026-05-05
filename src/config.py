@@ -39,6 +39,9 @@ class Settings(BaseSettings):
 
     # Fugo
     FUGO_API_KEY: str
+    FUGO_BASE_URL: str = "https://api.fugle.tw/marketdata/v1.0/stock"
+    FUGO_TIMEOUT: int = 10  # seconds
+    FUGO_MAX_RETRIES: int = 3
 
     # Google OAuth
     GOOGLE_CLIENT_ID: str | None = None
