@@ -6,18 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.clients.yfinance_client import YFinanceClient
 from src.database import get_db
 from src.response import Response
 from src.stocks import service
 from src.stocks.schema import StockCreate, StockListResponse, StockResponse, StockUpdate
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
-
-
-def get_yfinance_client() -> YFinanceClient:
-    """Dependency to get YFinanceClient instance."""
-    return YFinanceClient()
 
 
 @router.get(
@@ -59,21 +53,19 @@ async def list_stocks(
     "/search",
     response_model=Response[StockListResponse],
     summary="搜索股票",
-    description="根據股票代碼或名稱搜索股票（支援 Keyset 分頁）。先從資料庫搜尋，若無結果則從 YFinance API 搜尋並存入資料庫。",
+    description="根據股票代碼或名稱搜索股票（支援 Keyset 分頁）。從資料庫搜尋股票資料。",
 )
 async def search_stocks(
     q: str = Query(..., min_length=1, description="搜索關鍵字（匹配代碼或名稱）"),
     db: AsyncSession = Depends(get_db),
-    yfinance_client: YFinanceClient = Depends(get_yfinance_client),
     cursor: Optional[int] = Query(None, description="分頁游標（上一頁最後一筆的 ID）"),
     limit: int = Query(100, ge=1, le=100, description="每頁數量"),
 ) -> Response[StockListResponse]:
-    """Search stocks by symbol or name (database first, YFinance API fallback).
+    """Search stocks by symbol or name (database only).
 
     Args:
         q: Search query (matches symbol or name)
         db: Database session
-        yfinance_client: YFinance API client for fallback
         cursor: Pagination cursor
         limit: Items per page
 
@@ -85,7 +77,6 @@ async def search_stocks(
         query=q,
         cursor=cursor,
         limit=limit,
-        yfinance_client=yfinance_client,
     )
     return Response(
         data=StockListResponse(

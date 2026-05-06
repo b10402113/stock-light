@@ -59,7 +59,7 @@ class TestStocksRouter:
         response = await client.post(
             "/stocks",
             json={
-                "symbol": "INVALID",
+                "symbol": "INVALID-SYMBOL",
                 "name": "Invalid Stock",
             },
         )
@@ -351,35 +351,12 @@ class TestStocksRouter:
         assert len(data["data"]["data"]) == 3
 
     @pytest.mark.asyncio
-    async def test_search_stocks_yfinance_fallback_us_stock(self, client: AsyncClient):
-        """Test search with YFinance API fallback for US stock (AAPL)"""
-        # Search for US stock not in database
-        response = await client.get("/stocks/search?q=AAPL")
+    async def test_search_stocks_empty_result(self, client: AsyncClient):
+        """Test search returns empty when no matches in database"""
+        # Search for stock not in database (no YFinance fallback)
+        response = await client.get("/stocks/search?q=NOTEXIST")
 
         assert response.status_code == 200
         data = response.json()
-        print(f"\nSearch 'AAPL' (US stock): {data}")
-
-        # Should find AAPL from YFinance API
-        assert len(data["data"]["data"]) >= 1
-        # Check if AAPL is in results
-        symbols = [s["symbol"] for s in data["data"]["data"]]
-        assert "AAPL" in symbols
-
-    @pytest.mark.asyncio
-    async def test_search_stocks_yfinance_fallback_taiwan_stock(
-        self, client: AsyncClient
-    ):
-        """Test search with YFinance API fallback for Taiwan stock (TSM)"""
-        # Search for Taiwan stock TSMC ADR not in database
-        response = await client.get("/stocks/search?q=TSM")
-
-        assert response.status_code == 200
-        data = response.json()
-        print(f"\nSearch 'TSM' (Taiwan stock ADR): {data}")
-
-        # Should find TSM from YFinance API
-        assert len(data["data"]["data"]) >= 1
-        # Check if TSM is in results
-        symbols = [s["symbol"] for s in data["data"]["data"]]
-        assert "TSM" in symbols
+        assert len(data["data"]["data"]) == 0
+        assert data["data"]["has_more"] is False
