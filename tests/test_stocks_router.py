@@ -28,6 +28,8 @@ class TestStocksRouter:
         assert data["data"]["name"] == "台積電"
         assert data["data"]["current_price"] == "650.00"
         assert data["data"]["is_active"] is True
+        assert data["data"]["source"] == 1  # FUGLE
+        assert data["data"]["market"] == 1  # TAIWAN
 
     @pytest.mark.asyncio
     async def test_create_stock_duplicate_symbol(self, client: AsyncClient):
@@ -96,6 +98,8 @@ class TestStocksRouter:
         assert data["code"] == 0
         assert data["data"]["symbol"] == "2330.TW"
         assert data["data"]["name"] == "台積電"
+        assert data["data"]["source"] == 1  # FUGLE
+        assert data["data"]["market"] == 1  # TAIWAN
 
     @pytest.mark.asyncio
     async def test_get_stock_not_found(self, client: AsyncClient):

@@ -2,9 +2,24 @@
 
 from datetime import datetime
 from decimal import Decimal
+from enum import IntEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class StockSource(IntEnum):
+    """股票資料來源"""
+
+    FUGLE = 1
+    YFINANCE = 2
+
+
+class StockMarket(IntEnum):
+    """股票市場類型"""
+
+    TAIWAN = 1
+    US = 2
 
 
 class IntradayQuoteResponse(BaseModel):
@@ -70,6 +85,8 @@ class StockResponse(BaseModel):
         None, description="計算後的技術指標"
     )
     is_active: bool = Field(..., description="是否活躍")
+    source: StockSource = Field(..., description="資料來源")
+    market: StockMarket = Field(..., description="市場類型")
 
 
 class StockListResponse(BaseModel):
@@ -87,7 +104,9 @@ class StockCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     current_price: Decimal | None = Field(None, ge=0, le=100000)
     calculated_indicators: dict[str, Any] | None = None
-    is_active: bool = True
+    is_active: bool = False
+    source: StockSource = Field(default=StockSource.FUGLE, description="資料來源")
+    market: StockMarket = Field(default=StockMarket.TAIWAN, description="市場類型")
 
 
 class StockUpdate(BaseModel):

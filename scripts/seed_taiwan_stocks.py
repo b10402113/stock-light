@@ -1,7 +1,12 @@
 """Seed Taiwan stocks from Fugle API."""
 
 import asyncio
+import sys
+from pathlib import Path
 
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -9,6 +14,7 @@ from src.clients.fugle_client import FugoClient
 from src.config import settings
 from src.models.base import Base
 from src.stocks.model import Stock
+from src.stocks.schema import StockSource, StockMarket
 from src.users.model import User
 from src.subscriptions.model import IndicatorSubscription
 
@@ -39,7 +45,7 @@ async def seed_taiwan_stocks():
             print(f"Found {len(tickers)} stocks")
 
             stocks_created = 0
-            stocks_skipped = 0
+            stocks_updated = 0
 
             for ticker in tickers:
                 # Normalize symbol format (add .TW suffix for Taiwan stocks)
@@ -60,17 +66,26 @@ async def seed_taiwan_stocks():
                         name=name,
                         current_price=None,
                         calculated_indicators=None,
-                        is_active=True,
+                        is_active=False,
+                        source=StockSource.FUGLE,
+                        market=StockMarket.TAIWAN,
                     )
                     session.add(stock)
                     stocks_created += 1
                 else:
-                    stocks_skipped += 1
+                    # Update all fields for existing stock
+                    existing_stock.name = name
+                    existing_stock.current_price = None
+                    existing_stock.calculated_indicators = None
+                    existing_stock.is_active = False
+                    existing_stock.source = StockSource.FUGLE
+                    existing_stock.market = StockMarket.TAIWAN
+                    stocks_updated += 1
 
             await session.commit()
             print(f"\n✅ Seed completed!")
             print(f"   Created: {stocks_created} stocks")
-            print(f"   Skipped: {stocks_skipped} stocks (already exist)")
+            print(f"   Updated: {stocks_updated} stocks")
 
         except Exception as e:
             await session.rollback()

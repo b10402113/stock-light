@@ -1,16 +1,39 @@
 # Current Feature
 
+## Add Source Field to Stock Model
+
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-<!-- Add feature goals here when starting a new feature -->
+- Add `source` field to Stock model to track data origin (Fugle vs YFinance)
+- Add `market` field to Stock model to track stock market type (Taiwan vs US)
+- Create StockSource IntEnum with FUGLE=1 and YFINANCE=2 values
+- Create StockMarket IntEnum with TAIWAN=1 and US=2 values
+- Add source and market columns as SmallInteger with default values
+- Create Alembic migration for both new columns
+- Update StockResponse and StockCreate schemas to include both fields
+- Update seed script to set source=StockSource.FUGLE and market=StockMarket.TAIWAN
+- Update tests to include both fields in payloads and verify API responses
 
 ## Notes
 
-<!-- Add implementation notes and constraints here -->
+- Database: Two SmallInteger columns (1-2 bytes each), non-nullable
+- Source: default=1 (FUGLE), Market: default=1 (TAIWAN)
+- Existing stocks will default to FUGLE source and TAIWAN market
+- Enum pattern follows ErrorCode style from exceptions.py
+- Both fields appear in API responses as integers (1 or 2)
+- Enables debugging data quality issues and future source/market-specific handling
+
+## Implementation Files
+
+- src/stocks/model.py - Add source column
+- src/stocks/schema.py - Add StockSource enum and update schemas
+- migrations/versions/ - Create 2026-05-06_add_stock_source.py
+- scripts/seed_taiwan_stocks.py - Set source field
+- tests/test_stocks_router.py - Update test payloads
 
 ## History
 
