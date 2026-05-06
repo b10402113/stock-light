@@ -1,3 +1,6 @@
 """External API clients."""
 
-__all__ = ["FugoClient"]
+from src.clients.fugle_client import FugoClient
+from src.clients.yfinance_client import YFinanceClient
+
+__all__ = ["FugoClient", "YFinanceClient"]

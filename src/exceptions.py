@@ -39,8 +39,10 @@ class ErrorCode(IntEnum):
 
     # 外部服務錯誤 (500-599)
     FUGO_API_ERROR = 500
+    FUGLE_API_ERROR = 500  # Alias for Fugle API (same as FUGO)
     LINE_API_ERROR = 501
     EXTERNAL_SERVICE_TIMEOUT = 502
+    YFINANCE_API_ERROR = 503
 
     # 系統錯誤 (900-999)
     DATABASE_ERROR = 900
@@ -72,8 +74,10 @@ class ErrorCode(IntEnum):
             ErrorCode.SUBSCRIPTION_LIMIT_EXCEEDED: "訂閱數量超過上限",
             ErrorCode.ALERT_CONDITION_INVALID: "警報條件無效",
             ErrorCode.FUGO_API_ERROR: "Fugo API 錯誤",
+            ErrorCode.FUGLE_API_ERROR: "Fugle API 錯誤",
             ErrorCode.LINE_API_ERROR: "LINE API 錯誤",
             ErrorCode.EXTERNAL_SERVICE_TIMEOUT: "外部服務超時",
+            ErrorCode.YFINANCE_API_ERROR: "YFinance API 錯誤",
             ErrorCode.DATABASE_ERROR: "資料庫錯誤",
             ErrorCode.INTERNAL_ERROR: "系統內部錯誤",
         }

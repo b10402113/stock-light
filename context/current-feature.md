@@ -1,16 +1,38 @@
-# Current Feature
+# YFinance Ticker Search Client
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-<!-- Add feature goals here when starting a new feature -->
+- Install yfinance package and add to requirements.txt with version pinning
+- Research yfinance documentation using Context7 for key APIs and async patterns
+- Create `src/stocks/clients/yfinance_client.py` module
+- Implement ticker search functionality (by symbol and company name)
+- Return standardized response format compatible with TickerResponse schema
+- Follow domain self-containment principle - pure API wrapper, no business logic
+- Handle API errors gracefully
+- Support async patterns (yfinance is sync-only, may need threadpool wrapper)
+- Integrate with StockService as fallback data source
 
 ## Notes
 
-<!-- Add implementation notes and constraints here -->
+### Architecture
+- Location: `src/stocks/clients/yfinance_client.py` (new clients subdirectory)
+- Follow existing FugoClient pattern from `src/stocks/client.py`
+- Maintain compatibility with existing TickerResponse schema if possible
+- Consider creating shared client interface/protocol for multiple data sources
+
+### yfinance Characteristics
+- yfinance library is sync-only, may need `run_in_threadpool` for async compatibility
+- Need to understand rate limiting considerations
+- Document available fields and response formats
+
+### References
+- See `src/stocks/client.py` for existing FugoClient implementation pattern
+- See `src/stocks/service.py` for StockService integration point
+- See `src/stocks/schema.py` for existing ticker response schemas
 
 ## History
 

@@ -3,7 +3,7 @@
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.clients.fugle_client import FugoClient
+from src.clients.yfinance_client import YFinanceClient
 from src.stocks.model import Stock
 from src.stocks.schema import StockCreate, StockUpdate
 
@@ -89,16 +89,16 @@ class StockService:
         query: str,
         cursor: int | None = None,
         limit: int = 100,
-        fugle_client: FugoClient | None = None,
+        yfinance_client: YFinanceClient | None = None,
     ) -> tuple[list[Stock], int | None]:
-        """搜索股票 (Keyset Pagination) - Database first, Fugle API fallback.
+        """搜索股票 (Keyset Pagination) - Database first, YFinance API fallback.
 
         Args:
             db: 資料庫會話
             query: 搜索關鍵字 (匹配 symbol 或 name)
             cursor: 分頁游標 (上一頁最後一筆的 ID)
             limit: 最大返回數量
-            fugle_client: Fugle API client (optional, for fallback)
+            yfinance_client: YFinance API client (optional, for fallback)
 
         Returns:
             tuple[list[Stock], int | None]: 股票列表和下一頁游標
@@ -120,64 +120,65 @@ class StockService:
         result = await db.execute(stmt)
         stocks = list(result.scalars().all())
 
-        # If no results found in database and fugle_client is provided, fallback to Fugle API
-        if len(stocks) == 0 and fugle_client is not None:
-            try:
-                # Extract symbol from query (remove .TW suffix if present)
-                symbol_query = query.upper()
-                if symbol_query.endswith(".TW"):
-                    symbol_query = symbol_query[:-3]
-
-                # Query single ticker from Fugle API
-                ticker = await fugle_client.get_ticker(symbol_query)
-
-                if ticker is not None:
-                    # Check if query matches ticker symbol (case-insensitive)
-                    if query.lower() in ticker.symbol.lower():
-                        # Add .TW suffix for database storage
-                        symbol = ticker.symbol
-                        if not symbol.endswith(".TW"):
-                            symbol = f"{symbol}.TW"
-
-                        # Check if stock already exists (to avoid duplicates)
-                        existing_stmt = select(Stock).where(Stock.symbol == symbol)
-                        existing_result = await db.execute(existing_stmt)
-                        existing_stock = existing_result.scalar_one_or_none()
-
-                        if existing_stock is None:
-                            # Create new stock
-                            stock = Stock(
-                                symbol=symbol,
-                                name=ticker.name,
-                                current_price=None,
-                                calculated_indicators=None,
-                                is_active=True,
-                            )
-                            db.add(stock)
-                            await db.commit()
-
-                        # Re-query to get the newly created stock
-                        stmt = (
-                            select(Stock)
-                            .where(
-                                Stock.is_deleted.is_(False),
-                                Stock.symbol == symbol,
-                            )
-                            .order_by(Stock.id.asc())
-                            .limit(limit)
-                        )
-                        result = await db.execute(stmt)
-                        stocks = list(result.scalars().all())
-
-            except Exception:
-                # If Fugle API fails, just return empty list
-                pass
+        # If no results found in database, try YFinance API
+        if len(stocks) == 0 and yfinance_client is not None:
+            stocks = await StockService._fallback_yfinance(
+                db, query, limit, yfinance_client
+            )
 
         next_cursor = None
         if len(stocks) == limit:
             next_cursor = stocks[-1].id
 
         return stocks, next_cursor
+
+    @staticmethod
+    async def _fallback_yfinance(
+        db: AsyncSession,
+        query: str,
+        limit: int,
+        yfinance_client: YFinanceClient,
+    ) -> list[Stock]:
+        """YFinance API fallback for stock search."""
+        try:
+            # Search tickers via YFinance
+            tickers = await yfinance_client.search_tickers(query, max_results=limit)
+
+            stocks = []
+            for ticker in tickers:
+                # Normalize symbol format
+                symbol = ticker.symbol
+                # For Taiwan stocks (4-digit numbers), ensure .TW suffix
+                if symbol.isdigit() and len(symbol) == 4:
+                    symbol = f"{symbol}.TW"
+
+                # Check if stock already exists
+                existing_stmt = select(Stock).where(Stock.symbol == symbol)
+                existing_result = await db.execute(existing_stmt)
+                existing_stock = existing_result.scalar_one_or_none()
+
+                if existing_stock is None:
+                    # Create new stock
+                    stock = Stock(
+                        symbol=symbol,
+                        name=ticker.name,
+                        current_price=None,
+                        calculated_indicators=None,
+                        is_active=True,
+                    )
+                    db.add(stock)
+                    await db.commit()
+                    await db.refresh(stock)
+                    stocks.append(stock)
+                else:
+                    stocks.append(existing_stock)
+
+            return stocks[:limit]
+
+        except Exception:
+            pass
+
+        return []
 
     @staticmethod
     async def create(db: AsyncSession, data: StockCreate) -> Stock:
