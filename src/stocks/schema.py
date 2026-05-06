@@ -27,7 +27,7 @@ class TickerResponse(BaseModel):
     """Fugle ticker response for stock list."""
 
     symbol: str = Field(..., description="股票代碼")
-    name: str = Field(..., description="股票名稱")
+    name: str | None = Field(None, description="股票名稱")
 
 
 class IntradayCandle(BaseModel):
@@ -63,7 +63,7 @@ class StockResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    symbol: str = Field(..., max_length=20, description="股票代碼，如 2330.TW")
+    symbol: str = Field(..., max_length=20, description="股票代碼，如 2330")
     name: str = Field(..., max_length=255, description="股票名稱")
     current_price: Decimal | None = Field(None, description="當前價格")
     calculated_indicators: dict[str, Any] | None = Field(

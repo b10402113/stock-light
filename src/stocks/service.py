@@ -3,7 +3,6 @@
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.clients.yfinance_client import YFinanceClient
 from src.stocks.model import Stock
 from src.stocks.schema import StockCreate, StockUpdate
 
@@ -89,21 +88,18 @@ class StockService:
         query: str,
         cursor: int | None = None,
         limit: int = 100,
-        yfinance_client: YFinanceClient | None = None,
     ) -> tuple[list[Stock], int | None]:
-        """搜索股票 (Keyset Pagination) - Database first, YFinance API fallback.
+        """搜索股票 (Keyset Pagination) - Database only.
 
         Args:
             db: 資料庫會話
             query: 搜索關鍵字 (匹配 symbol 或 name)
             cursor: 分頁游標 (上一頁最後一筆的 ID)
             limit: 最大返回數量
-            yfinance_client: YFinance API client (optional, for fallback)
 
         Returns:
             tuple[list[Stock], int | None]: 股票列表和下一頁游標
         """
-        # First, search database
         pattern = f"%{query}%"
         stmt = select(Stock).where(
             Stock.is_deleted.is_(False),
@@ -120,65 +116,11 @@ class StockService:
         result = await db.execute(stmt)
         stocks = list(result.scalars().all())
 
-        # If no results found in database, try YFinance API
-        if len(stocks) == 0 and yfinance_client is not None:
-            stocks = await StockService._fallback_yfinance(
-                db, query, limit, yfinance_client
-            )
-
         next_cursor = None
         if len(stocks) == limit:
             next_cursor = stocks[-1].id
 
         return stocks, next_cursor
-
-    @staticmethod
-    async def _fallback_yfinance(
-        db: AsyncSession,
-        query: str,
-        limit: int,
-        yfinance_client: YFinanceClient,
-    ) -> list[Stock]:
-        """YFinance API fallback for stock search."""
-        try:
-            # Search tickers via YFinance
-            tickers = await yfinance_client.search_tickers(query, max_results=limit)
-
-            stocks = []
-            for ticker in tickers:
-                # Normalize symbol format
-                symbol = ticker.symbol
-                # For Taiwan stocks (4-digit numbers), ensure .TW suffix
-                if symbol.isdigit() and len(symbol) == 4:
-                    symbol = f"{symbol}.TW"
-
-                # Check if stock already exists
-                existing_stmt = select(Stock).where(Stock.symbol == symbol)
-                existing_result = await db.execute(existing_stmt)
-                existing_stock = existing_result.scalar_one_or_none()
-
-                if existing_stock is None:
-                    # Create new stock
-                    stock = Stock(
-                        symbol=symbol,
-                        name=ticker.name,
-                        current_price=None,
-                        calculated_indicators=None,
-                        is_active=True,
-                    )
-                    db.add(stock)
-                    await db.commit()
-                    await db.refresh(stock)
-                    stocks.append(stock)
-                else:
-                    stocks.append(existing_stock)
-
-            return stocks[:limit]
-
-        except Exception:
-            pass
-
-        return []
 
     @staticmethod
     async def create(db: AsyncSession, data: StockCreate) -> Stock:

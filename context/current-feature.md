@@ -1,16 +1,42 @@
-# Current Feature
+# Current Feature: Database-Only Stock Search with Taiwan Seed Data
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-<!-- Add feature goals here when starting a new feature -->
+- Remove YFinance API fallback from `search_stocks` in StockService ✅
+- Simplify search logic to database-only queries ✅
+- Remove YFinanceClient dependency injection from stocks router ✅
+- Create seed script `scripts/seed_taiwan_stocks.py` using Fugle API ✅
+- Fetch all Taiwan stocks (~2,500) from Fugle tickers endpoint ✅
+- Store stocks with symbol, name, current_price, `is_active=True` ✅
+- Support re-runnable seeding with upsert logic ✅
+- Verify search works for common Taiwan stocks (e.g., "2330", "台積電") ✅
+- Ensure all existing tests pass after changes ✅
 
 ## Notes
 
-<!-- Add implementation notes and constraints here -->
+- Fugle API endpoint: `https://api.fugle.tw/marketdata/v1.0/stock/intraday/tickers`
+- Store 4-digit symbols with `.TW` suffix (e.g., "2330.TW", "1234.TW")
+- Added `get_tickers` method to FugoClient to fetch all Taiwan stocks
+- Seed script uses `normalize_symbol` function to add .TW suffix
+- Bulk insert with duplicate checking (upsert logic)
+- 114 tests passing (1 pre-existing failure unrelated to changes)
+
+## History
+
+- 2026-05-06: Database-Only Stock Search with Taiwan Seed Data
+  - Removed `_fallback_yfinance` method from StockService
+  - Removed YFinanceClient parameter from `search_stocks` method
+  - Removed YFinanceClient import and dependency injection from router
+  - Added `get_tickers` method to FugoClient (fetches all Taiwan stocks)
+  - Created seed script `scripts/seed_taiwan_stocks.py`
+  - Seed script normalizes symbols with .TW suffix for Taiwan stocks
+  - Removed YFinance fallback tests, added empty result test
+  - Updated API documentation (removed YFinance fallback mention)
+  - All 114 tests passing (19 stocks router tests)
 
 ## History
 

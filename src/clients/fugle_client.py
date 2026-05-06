@@ -153,3 +153,31 @@ class FugoClient(BaseHTTPClient):
                 self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
 
             return TickerResponse(**response.json())
+
+    @get_retry_decorator(max_retries=3)
+    async def get_tickers(self) -> list[TickerResponse]:
+        """Get all Taiwan stock tickers.
+
+        Returns:
+            List of TickerResponse with all Taiwan stocks (TSE + OTC)
+
+        Raises:
+            BizException: On API errors
+        """
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            url = f"{self.base_url}/intraday/tickers"
+            response = await client.get(url, headers=self._get_headers())
+
+            if response.status_code != 200:
+                self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
+
+            data = response.json()
+            # Handle different response formats
+            if isinstance(data, list):
+                tickers = data
+            elif isinstance(data, dict):
+                tickers = data.get("data", [])
+            else:
+                tickers = []
+
+            return [TickerResponse(**t) for t in tickers]
