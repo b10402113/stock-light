@@ -1,41 +1,76 @@
 # Current Feature
 
-## Add Source Field to Stock Model
+## Phase 1: Redis 資料結構與環境設計
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Add `source` field to Stock model to track data origin (Fugle vs YFinance)
-- Add `market` field to Stock model to track stock market type (Taiwan vs US)
-- Create StockSource IntEnum with FUGLE=1 and YFINANCE=2 values
-- Create StockMarket IntEnum with TAIWAN=1 and US=2 values
-- Add source and market columns as SmallInteger with default values
-- Create Alembic migration for both new columns
-- Update StockResponse and StockCreate schemas to include both fields
-- Update seed script to set source=StockSource.FUGLE and market=StockMarket.TAIWAN
-- Update tests to include both fields in payloads and verify API responses
+- 建立高效的鍵值對儲存機制，避免 Race Condition
+- 實作 Active 股票清單 (Redis Set: `stocks:active`)
+- 實作股票價格快取 (Redis Hash: `stock:info:{ticker}`)
+- 配置 Redis 環境與連線管理
+- 安裝必要套件: fastapi, arq, redis, yfinance
 
 ## Notes
 
-- Database: Two SmallInteger columns (1-2 bytes each), non-nullable
-- Source: default=1 (FUGLE), Market: default=1 (TAIWAN)
-- Existing stocks will default to FUGLE source and TAIWAN market
-- Enum pattern follows ErrorCode style from exceptions.py
-- Both fields appear in API responses as integers (1 or 2)
-- Enables debugging data quality issues and future source/market-specific handling
+### Redis 資料結構設計
+
+**Active 股票清單**
+- Key: `stocks:active`
+- Type: Redis Set
+- 用途: 儲存所有需要監控的股票代碼
+- 操作: SADD, SREM, SMEMBERS
+
+**股票價格快取**
+- Key Pattern: `stock:info:{ticker}`
+- Type: Redis Hash
+- Fields:
+  - `price`: 當前價格 (float)
+  - `updated_at`: 最後更新的 Unix Timestamp (int)
+- 操作: HSET, HGET, HGETALL
+
+### Race Condition 防護策略
+
+- 使用 Redis atomic operations (SADD, HSET)
+- 單一 Worker 負責價格更新 (避免多 Worker 同時寫入)
+- 套件選擇: `arq` (基於 Redis 的 async job queue)
+
+### Implementation Files
+
+- `src/stocks/redis_client.py` - Redis client wrapper
+- `src/config.py` - Add Redis connection settings
+- `requirements.txt` - Add redis, arq dependencies
+
+### Package Installation
+
+```bash
+pip install redis arq
+```
+
+Note: `fastapi` and `yfinance` are already installed
 
 ## Implementation Files
 
-- src/stocks/model.py - Add source column
-- src/stocks/schema.py - Add StockSource enum and update schemas
-- migrations/versions/ - Create 2026-05-06_add_stock_source.py
-- scripts/seed_taiwan_stocks.py - Set source field
-- tests/test_stocks_router.py - Update test payloads
+- src/stocks/redis_client.py - Redis client wrapper for stock data caching
+- src/config.py - Add Redis connection settings (REDIS_URL, REDIS_TIMEOUT)
+- requirements.txt - Add redis>=5.0.0, arq>=0.25.0
+- tests/test_redis_client.py - Unit tests for Redis operations
 
 ## History
+
+- 2026-05-06: Add Source Field to Stock Model
+  - Added `source` field to Stock model to track data origin (Fugle vs YFinance)
+  - Added `market` field to Stock model to track stock market type (Taiwan vs US)
+  - Created StockSource IntEnum with FUGLE=1 and YFINANCE=2 values
+  - Created StockMarket IntEnum with TAIWAN=1 and US=2 values
+  - Added source and market columns as SmallInteger with default values
+  - Created Alembic migration for both new columns
+  - Updated StockResponse and StockCreate schemas to include both fields
+  - Updated seed script to set source=StockSource.FUGLE and market=StockMarket.TAIWAN
+  - Updated tests to include both fields in payloads and verify API responses
 
 - 2026-05-06: Database-Only Stock Search with Taiwan Seed Data
   - Removed YFinance API fallback from search_stocks (database-only queries)
