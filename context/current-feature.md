@@ -4,7 +4,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
@@ -40,7 +40,7 @@ Not Started
 
 ### Implementation Files
 
-- `src/stocks/redis_client.py` - Redis client wrapper
+- `src/clients/redis_client.py` - Redis client wrapper
 - `src/config.py` - Add Redis connection settings
 - `requirements.txt` - Add redis, arq dependencies
 
@@ -54,12 +54,35 @@ Note: `fastapi` and `yfinance` are already installed
 
 ## Implementation Files
 
-- src/stocks/redis_client.py - Redis client wrapper for stock data caching
+- src/clients/redis_client.py - Redis client wrapper for stock data caching
 - src/config.py - Add Redis connection settings (REDIS_URL, REDIS_TIMEOUT)
 - requirements.txt - Add redis>=5.0.0, arq>=0.25.0
 - tests/test_redis_client.py - Unit tests for Redis operations
 
 ## History
+
+- 2026-05-06: Phase 1 - Redis 資料結構與環境設計
+  - Added arq>=0.25.0 to requirements.txt for async job queue
+  - Added REDIS_TIMEOUT setting to config.py (5 seconds default)
+  - Created StockRedisClient in src/clients/redis_client.py
+  - Implemented Redis Set operations for active stocks monitoring:
+    - add_active_stock() - SADD (atomic operation)
+    - remove_active_stock() - SREM (atomic operation)
+    - get_active_stocks() - SMEMBERS
+    - clear_active_stocks() - DELETE
+  - Implemented Redis Hash operations for stock price caching:
+    - set_stock_price() - HSET with price and updated_at fields
+    - get_stock_price() - HGET for single price field
+    - get_stock_info() - HGETALL for full stock info
+    - delete_stock_info() - DELETE stock hash
+    - get_stocks_updated_since() - Find recently updated stocks
+  - Added Redis error codes to ErrorCode enum:
+    - REDIS_CONNECTION_ERROR (504)
+    - REDIS_OPERATION_ERROR (505)
+  - Wrote 23 comprehensive unit tests with mocked Redis
+  - All tests passing (62 tests including stocks router and client tests)
+  - Race condition prevention: atomic Redis operations (SADD, HSET)
+  - Redis client moved to src/clients/ following existing client organization
 
 - 2026-05-06: Add Source Field to Stock Model
   - Added `source` field to Stock model to track data origin (Fugle vs YFinance)

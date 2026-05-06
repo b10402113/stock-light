@@ -43,6 +43,8 @@ class ErrorCode(IntEnum):
     LINE_API_ERROR = 501
     EXTERNAL_SERVICE_TIMEOUT = 502
     YFINANCE_API_ERROR = 503
+    REDIS_CONNECTION_ERROR = 504
+    REDIS_OPERATION_ERROR = 505
 
     # 系統錯誤 (900-999)
     DATABASE_ERROR = 900
@@ -78,6 +80,8 @@ class ErrorCode(IntEnum):
             ErrorCode.LINE_API_ERROR: "LINE API 錯誤",
             ErrorCode.EXTERNAL_SERVICE_TIMEOUT: "外部服務超時",
             ErrorCode.YFINANCE_API_ERROR: "YFinance API 錯誤",
+            ErrorCode.REDIS_CONNECTION_ERROR: "Redis 連線錯誤",
+            ErrorCode.REDIS_OPERATION_ERROR: "Redis 操作錯誤",
             ErrorCode.DATABASE_ERROR: "資料庫錯誤",
             ErrorCode.INTERNAL_ERROR: "系統內部錯誤",
         }

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_TIMEOUT: int = 5  # seconds
 
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"

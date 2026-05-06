@@ -25,6 +25,7 @@ yfinance>=0.2.0
 # Task Queue
 celery>=5.4.0
 redis>=5.0.0
+arq>=0.25.0
 
 # Development
 ruff>=0.6.0
