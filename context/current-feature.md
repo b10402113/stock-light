@@ -2,79 +2,32 @@
 
 ## Status
 
-In Progress
-
-## Feature
-
-Phase 2: 智慧分批與 Master Task 開發 (ARQ Cron)
+Not Started
 
 ## Goals
 
-- Set up ARQ cron job running every minute to trigger stock price updates
-- Implement master task that identifies stocks needing updates (updated_at >= 5 minutes old)
-- Split update candidates into batches of 50 stocks per chunk
-- Dispatch batch jobs to ARQ workers using enqueue_job
-- Integrate with Phase 1 Redis infrastructure (StockRedisClient)
-
 ## Notes
-
-- Master task function: `update_stock_prices_master`
-- Sub-task function: `update_stock_prices_batch` (will be implemented in Phase 3)
-- Batch size: 50 stocks per chunk
-- Update interval threshold: 300 seconds (5 minutes)
-- Uses Redis keys from Phase 1: `stocks:active` and `stock:{symbol}`
-- Domain self-containment: tasks module owns its config and worker setup
-
-## Implementation Files
-
-- `src/tasks/__init__.py` - Module initialization
-- `src/tasks/config.py` - ARQ Redis connection and job settings
-- `src/tasks/worker.py` - WorkerSettings class with cron and task functions
-- `src/config.py` - Add ARQ-related settings (REDIS_HOST, ARQ_JOB_TIMEOUT, etc.)
-- `tests/tasks/test_worker.py` - Unit tests for master task logic
-
-## Spec File
-
-@context/features/phase2-arq-cron-master-task.md
 
 ## Implementation Files
 
 ## History
 
 - 2026-05-07: Phase 2 - 智慧分批與 Master Task 開發 (ARQ Cron)
-  - Added ARQ settings to src/config.py:
-    - ARQ_JOB_TIMEOUT (default: 300 seconds)
-    - ARQ_MAX_TRIES (default: 3)
-    - STOCK_UPDATE_INTERVAL (default: 300 seconds / 5 minutes)
-    - STOCK_BATCH_SIZE (default: 50 stocks per batch)
-  - Created src/tasks/ module with domain self-containment principle
+  - Added ARQ settings to src/config.py (job timeout, retries, batch size, update interval)
+  - Created src/tasks/ module following domain self-containment principle
   - Created src/tasks/config.py for ARQ Redis connection configuration
-    - get_redis_settings() parses REDIS_URL to create RedisSettings
-    - Uses existing REDIS_URL and REDIS_TIMEOUT from Phase 1
-  - Created src/tasks/worker.py with WorkerSettings and task functions:
-    - update_stock_prices_master: Master task running every minute via cron
-      - Fetches active stocks from Redis (stocks:active)
-      - Checks each stock's updated_at timestamp
-      - Identifies stocks needing updates (>= 5 minutes old or no record)
-      - Splits into batches of 50 stocks per chunk
-      - Dispatches batch jobs using enqueue_job
-    - update_stock_prices_batch: Placeholder for Phase 3 implementation
-    - WorkerSettings class with cron configuration and job settings
-    - Proper error handling and logging throughout
-    - try-finally block ensures Redis client is always closed
-  - Wrote 9 unit tests for master task logic:
-    - Test no dispatch when no active stocks
-    - Test correct identification of stocks needing updates
-    - Test batch splitting for large stock lists
-    - Test error handling continues on Redis failure
-    - Test Redis connection failure logged
-    - Test no dispatch when all stocks recently updated
-    - Test cron jobs configuration
-    - Test task functions registered
-    - Test WorkerSettings attributes
+  - Created src/tasks/worker.py with WorkerSettings and master task
+  - Implemented update_stock_prices_master with concurrent stock filtering:
+    - Uses asyncio.gather for parallel Redis queries (avoids N+1 problem)
+    - Identifies stocks needing updates (>= 5 minutes old or no record)
+    - Batch splitting logic (50 stocks per chunk)
+    - Concurrent job dispatch using asyncio.gather
+  - Modified StockRedisClient to accept external Redis pool (from ARQ)
+  - Improved error handling: skip problematic stocks instead of adding to queue
+  - Used ctx["redis"] (ARQ standard key) to reuse shared pool
+  - Wrote 9 unit tests covering filtering, batching, error scenarios, cron config
   - All 9 Phase 2 tests passing
-  - Integration with Phase 1 StockRedisClient
-  - Follows domain self-containment: tasks module owns config and worker setup
+  - Integration with Phase 1 Redis infrastructure
 
 - 2026-05-07: Phase 1 - Redis 資料結構與環境設計
   - Added arq>=0.25.0 to requirements.txt for async job queue
