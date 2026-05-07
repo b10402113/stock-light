@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     FUGO_TIMEOUT: int = 10  # seconds
     FUGO_MAX_RETRIES: int = 3
 
+    # Fugle API Rate Limiting
+    FUGLE_RATE_LIMIT: int = 50  # requests per minute (time window)
+    FUGLE_MAX_CONCURRENT_REQUESTS: int = 10  # max concurrent requests
+
     # Google OAuth
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None

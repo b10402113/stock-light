@@ -1,6 +1,8 @@
 """Fugo API client - only wraps API calls, no business logic."""
 
+import asyncio
 import httpx
+from aiolimiter import AsyncLimiter
 
 from src.config import settings
 from src.clients.base import BaseHTTPClient, get_retry_decorator
@@ -9,10 +11,14 @@ from src.stocks.schema import HistoricalCandle, IntradayCandle, IntradayQuoteRes
 
 
 class FugoClient(BaseHTTPClient):
-    """Fugo API client for stock market data.
+    """Fugo API client for stock market data with rate limiting.
 
     This client only wraps API calls - no business logic.
     All methods raise BizException on API errors.
+
+    Rate limiting:
+    - Time window: Max 50 requests per minute (Fugle API limit)
+    - Concurrency: Max 10 concurrent requests (configurable)
     """
 
     def __init__(
@@ -29,13 +35,22 @@ class FugoClient(BaseHTTPClient):
         self.api_key = api_key or settings.FUGO_API_KEY
         self.base_url = base_url or settings.FUGO_BASE_URL
 
+        # Rate limiter: 每分鐘最多 50 個請求（時間窗口）
+        self.rate_limiter = AsyncLimiter(
+            max_rate=settings.FUGLE_RATE_LIMIT,  # 50 requests
+            time_period=60  # 60 seconds
+        )
+
+        # Semaphore: 同時最多 10 個並發請求
+        self.semaphore = asyncio.Semaphore(settings.FUGLE_MAX_CONCURRENT_REQUESTS)
+
     def _get_headers(self) -> dict[str, str]:
         """Get API headers with authentication."""
         return {"X-API-KEY": self.api_key}
 
     @get_retry_decorator(max_retries=3)
     async def get_intraday_quote(self, symbol: str) -> IntradayQuoteResponse:
-        """Get latest stock information by symbol (intraday quote).
+        """Get latest stock information by symbol (intraday quote) with rate limiting.
 
         Args:
             symbol: Stock symbol (e.g., "2330")
@@ -46,14 +61,17 @@ class FugoClient(BaseHTTPClient):
         Raises:
             BizException: On API errors
         """
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            url = f"{self.base_url}/intraday/quote/{symbol}"
-            response = await client.get(url, headers=self._get_headers())
+        # Apply rate limiting (time window + concurrency)
+        async with self.rate_limiter:  # 時間窗口限制：每分鐘最多 50 個請求
+            async with self.semaphore:  # 並發數限制：同時最多 10 個請求
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    url = f"{self.base_url}/intraday/quote/{symbol}"
+                    response = await client.get(url, headers=self._get_headers())
 
-            if response.status_code != 200:
-                self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
+                    if response.status_code != 200:
+                        self._handle_error(response, "Fugo API", ErrorCode.FUGO_API_ERROR)
 
-            return IntradayQuoteResponse(**response.json())
+                    return IntradayQuoteResponse(**response.json())
 
     @get_retry_decorator(max_retries=3)
     async def get_intraday_candles(self, symbol: str) -> list[IntradayCandle]:

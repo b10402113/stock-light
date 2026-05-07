@@ -406,6 +406,7 @@ class WorkerSettings:
     # Job configuration
     job_timeout = settings.ARQ_JOB_TIMEOUT
     max_tries = settings.ARQ_MAX_TRIES
+    max_jobs = 1  # Limit concurrent batch jobs to prevent rate limit exceeded
 
     # Cron jobs - configurable via .env
     cron_jobs = [
