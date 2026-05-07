@@ -1,4 +1,4 @@
-# Current Feature
+# Current Feature: Split ARQ Workers by Task Type
 
 ## Status
 
@@ -6,9 +6,74 @@ Not Started
 
 ## Goals
 
+- Separate API-intensive batch jobs from fast system scheduling tasks
+- Prevent API rate limiting issues by isolating API worker with `max_jobs=1`
+- Allow system tasks to run concurrently without being blocked by slow API calls
+- Master task dispatches batch jobs to dedicated `api_queue`
+- Two distinct worker classes: `DefaultWorkerSettings` and `ApiWorkerSettings`
+
 ## Notes
 
+### Current Problem
+- Current `WorkerSettings` has `max_jobs=1` to prevent 429 rate limit errors
+- This single setting blocks ALL tasks (including fast system tasks like `persist_redis_to_database`)
+- System tasks run quickly but must wait for slow API batch jobs to complete
+
+### Solution Architecture
+- **Default Worker**: Monitors default queue `arq:queue`, handles cron scheduling and fast system tasks
+  - `max_jobs=10` (high concurrency for non-blocking tasks)
+  - Functions: `update_stock_prices_master`, `persist_redis_to_database`, `sync_active_stocks_to_redis`
+  - Contains all `cron_jobs`
+
+- **API Worker**: Monitors dedicated `api_queue`, only handles API batch jobs
+  - `max_jobs=1` (serial execution to respect rate limits)
+  - Functions: `update_stock_prices_batch`
+  - No cron jobs (passive, receives jobs from master task)
+
+### Implementation Steps
+
+1. **Modify Master Task**: Add `_queue_name="api_queue"` to `enqueue_job` call
+   ```python
+   # In update_stock_prices_master, Step 4
+   enqueue_tasks = [
+       redis_pool.enqueue_job(
+           "update_stock_prices_batch",
+           batch,
+           _queue_name="api_queue"  # Dispatch to API queue
+       )
+       for batch in batches
+   ]
+   ```
+
+2. **Split WorkerSettings into Two Classes**:
+   ```python
+   class DefaultWorkerSettings:
+       """Fast system tasks and cron scheduling."""
+       functions = [
+           update_stock_prices_master,
+           persist_redis_to_database,
+           sync_active_stocks_to_redis,
+       ]
+       max_jobs = 10  # High concurrency for fast tasks
+       cron_jobs = [...]  # All cron scheduling
+
+   class ApiWorkerSettings:
+       """API batch jobs with rate limiting."""
+       queue_name = "api_queue"  # Dedicated queue
+       functions = [update_stock_prices_batch]
+       max_jobs = 1  # Serial execution
+       # No cron_jobs
+   ```
+
+3. **Deployment**: Run two worker processes
+   ```bash
+   arq src.tasks.worker.DefaultWorkerSettings  # System worker
+   arq src.tasks.worker.ApiWorkerSettings      # API worker
+   ```
+
 ## Implementation Files
+
+- [src/tasks/worker.py](src/tasks/worker.py) - Split WorkerSettings, modify master task
 
 ## History
 

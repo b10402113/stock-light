@@ -49,7 +49,7 @@ async def seed_taiwan_stocks():
 
             for ticker in tickers:
                 # Normalize symbol format (add .TW suffix for Taiwan stocks)
-                symbol = normalize_symbol(ticker.symbol)
+                symbol = ticker.symbol
 
                 # Use symbol as name if name is not provided
                 name = ticker.name or ticker.symbol

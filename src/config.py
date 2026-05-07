@@ -28,13 +28,16 @@ class Settings(BaseSettings):
     # ARQ (Async Job Queue)
     ARQ_JOB_TIMEOUT: int = 300  # seconds
     ARQ_MAX_TRIES: int = 3
-    STOCK_UPDATE_INTERVAL: int = 300  # seconds (5 minutes)
+    STOCK_UPDATE_INTERVAL: int = 60  # seconds (5 minutes)
     STOCK_BATCH_SIZE: int = 50  # stocks per batch
-    REDIS_PERSIST_INTERVAL: int = 900  # seconds (15 minutes)
+    REDIS_PERSIST_INTERVAL: int = 600  # seconds (15 minutes)
 
     # Cron job schedules (minute sets)
-    CRON_MASTER_MINUTES: str = "*"  # Every minute: "0-59" or "*"
-    CRON_PERSIST_MINUTES: str = "0,15,30,45"  # Every 15 minutes
+    # 多久丟一次要更新的stock id 給API worker
+    CRON_MASTER_MINUTES: str = "*/5"  # Every minute: "0-59" or "*"
+    # CRON_PERSIST_MINUTES: str = "0,15,30,45"  # Every 15 minutes
+    CRON_PERSIST_MINUTES: str = "*/1"  # Every 1 minutes for testing
+    CRON_SYNC_STOCKS_MINUTES: str = "*/1"  # Every 5 minutes: sync active stocks to Redis
 
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"

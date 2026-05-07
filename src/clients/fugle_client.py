@@ -19,7 +19,16 @@ class FugoClient(BaseHTTPClient):
     Rate limiting:
     - Time window: Max 50 requests per minute (Fugle API limit)
     - Concurrency: Max 10 concurrent requests (configurable)
+
+    Important: Rate limiter is SHARED across all instances to respect Fugle API's
+    global per-API-key rate limit. Creating multiple FugoClient instances will still
+    share the same rate limiter.
     """
+
+    # Shared rate limiter across all instances (singleton pattern)
+    # This ensures we respect Fugle API's global rate limit per API key
+    _shared_rate_limiter: AsyncLimiter | None = None
+    _shared_semaphore: asyncio.Semaphore | None = None
 
     def __init__(
         self,
@@ -35,14 +44,22 @@ class FugoClient(BaseHTTPClient):
         self.api_key = api_key or settings.FUGO_API_KEY
         self.base_url = base_url or settings.FUGO_BASE_URL
 
-        # Rate limiter: 每分鐘最多 50 個請求（時間窗口）
-        self.rate_limiter = AsyncLimiter(
-            max_rate=settings.FUGLE_RATE_LIMIT,  # 50 requests
-            time_period=60  # 60 seconds
-        )
+        # Initialize shared rate limiter (singleton pattern)
+        if FugoClient._shared_rate_limiter is None:
+            FugoClient._shared_rate_limiter = AsyncLimiter(
+                max_rate=settings.FUGLE_RATE_LIMIT,  # 50 requests
+                time_period=60  # 60 seconds
+            )
 
-        # Semaphore: 同時最多 10 個並發請求
-        self.semaphore = asyncio.Semaphore(settings.FUGLE_MAX_CONCURRENT_REQUESTS)
+        # Initialize shared semaphore (singleton pattern)
+        if FugoClient._shared_semaphore is None:
+            FugoClient._shared_semaphore = asyncio.Semaphore(
+                settings.FUGLE_MAX_CONCURRENT_REQUESTS
+            )
+
+        # Use shared rate limiter and semaphore
+        self.rate_limiter = FugoClient._shared_rate_limiter
+        self.semaphore = FugoClient._shared_semaphore
 
     def _get_headers(self) -> dict[str, str]:
         """Get API headers with authentication."""

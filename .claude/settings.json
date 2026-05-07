@@ -6,7 +6,10 @@
       "Bash(python -m pytest tests/ -v --tb=short)",
       "Bash(git push *)",
       "Bash(git commit *)",
-      "Bash(python -c \"import testcontainers; from testcontainers.postgres import PostgresContainer; print\\('testcontainers OK'\\)\")"
+      "Bash(python -c \"import testcontainers; from testcontainers.postgres import PostgresContainer; print\\('testcontainers OK'\\)\")",
+      "Bash(python -m scripts.seed_data clear)",
+      "Bash(python -m py_compile src/clients/yfinance_client.py)",
+      "WebFetch(domain:developer.fugle.tw)"
     ]
   }
 }
