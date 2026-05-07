@@ -97,3 +97,36 @@ class YFinanceClient:
             return None
 
         return TickerResponse(symbol=symbol, name=name)
+
+    async def get_current_price(self, symbol: str) -> float | None:
+        """Get current price for a single symbol.
+
+        Args:
+            symbol: Stock symbol (e.g., "AAPL", "2330.TW")
+
+        Returns:
+            Current price as float, or None if not found
+
+        Raises:
+            BizException: On API errors
+        """
+        try:
+            ticker = await run_in_threadpool(lambda: yf.Ticker(symbol))
+            info = await run_in_threadpool(lambda: ticker.info)
+
+            # Try multiple price fields (yfinance API variations)
+            price = (
+                info.get("currentPrice")
+                or info.get("regularMarketPrice")
+                or info.get("lastPrice")
+            )
+
+            if price is None:
+                return None
+
+            return float(price)
+        except Exception as e:
+            raise BizException(
+                ErrorCode.YFINANCE_API_ERROR,
+                f"YFinance price lookup failed for {symbol}: {str(e)}",
+            ) from e

@@ -19,11 +19,13 @@ class StockRedisClient:
 
     Data structures:
     - Active stocks list: Redis Set (key: stocks:active)
-    - Stock price cache: Redis Hash (key: stock:info:{ticker})
+    - Stock price cache: Redis Hash (key: stock:info:{stock_id})
 
     Fields in stock info hash:
+    - symbol: stock symbol (string, e.g., "006208")
     - price: current price (float)
     - updated_at: last update timestamp (int, Unix timestamp)
+    - source: data source (int, 1=Fugle, 2=YFinance, default=1)
     """
 
     ACTIVE_STOCKS_KEY = "stocks:active"
@@ -76,60 +78,69 @@ class StockRedisClient:
 
     # Active stocks operations (Redis Set)
 
-    async def add_active_stock(self, symbol: str) -> bool:
+    async def add_active_stock(self, stock_id: int) -> bool:
         """Add stock to active monitoring list.
 
         Uses SADD (atomic operation) to prevent race conditions.
 
         Args:
-            symbol: Stock symbol (e.g., '2330.TW')
+            stock_id: Stock primary key ID
 
         Returns:
             True if added (new member), False if already exists
         """
         try:
             client = await self._get_client()
-            result = await client.sadd(self.ACTIVE_STOCKS_KEY, symbol)
+            result = await client.sadd(self.ACTIVE_STOCKS_KEY, str(stock_id))
             return result == 1
         except RedisError as exc:
             raise BizException(
                 ErrorCode.REDIS_OPERATION_ERROR,
-                f"Failed to add active stock {symbol}: {exc}",
+                f"Failed to add active stock {stock_id}: {exc}",
             ) from exc
 
-    async def remove_active_stock(self, symbol: str) -> bool:
+    async def remove_active_stock(self, stock_id: int) -> bool:
         """Remove stock from active monitoring list.
 
         Uses SREM (atomic operation).
 
         Args:
-            symbol: Stock symbol
+            stock_id: Stock primary key ID
 
         Returns:
             True if removed, False if not in set
         """
         try:
             client = await self._get_client()
-            result = await client.srem(self.ACTIVE_STOCKS_KEY, symbol)
+            result = await client.srem(self.ACTIVE_STOCKS_KEY, str(stock_id))
             return result == 1
         except RedisError as exc:
             raise BizException(
                 ErrorCode.REDIS_OPERATION_ERROR,
-                f"Failed to remove active stock {symbol}: {exc}",
+                f"Failed to remove active stock {stock_id}: {exc}",
             ) from exc
 
-    async def get_active_stocks(self) -> list[str]:
+    async def get_active_stocks(self) -> list[int]:
         """Get all active stocks being monitored.
 
         Uses SMEMBERS to retrieve the full set.
 
         Returns:
-            List of stock symbols
+            List of stock IDs (decoded from bytes if needed)
         """
         try:
             client = await self._get_client()
             members = await client.smembers(self.ACTIVE_STOCKS_KEY)
-            return sorted(list(members))
+
+            # Decode bytes to integers if needed (ARQ pool doesn't use decode_responses)
+            decoded_members = []
+            for member in members:
+                if isinstance(member, bytes):
+                    decoded_members.append(int(member.decode("utf-8")))
+                else:
+                    decoded_members.append(int(member))
+
+            return sorted(decoded_members)
         except RedisError as exc:
             raise BizException(
                 ErrorCode.REDIS_OPERATION_ERROR,
@@ -153,142 +164,244 @@ class StockRedisClient:
 
     # Stock info operations (Redis Hash)
 
-    def _stock_info_key(self, symbol: str) -> str:
-        """Generate stock info hash key."""
-        return f"{self.STOCK_INFO_KEY_PREFIX}{symbol}"
-
-    async def set_stock_price(self, symbol: str, price: float) -> bool:
-        """Update stock price in cache.
-
-        Uses HSET (atomic operation) to update price and timestamp.
+    def _stock_info_key(self, stock_id: int) -> str:
+        """Generate stock info hash key.
 
         Args:
-            symbol: Stock symbol
+            stock_id: Stock primary key ID
+
+        Returns:
+            Redis key string (e.g., "stock:info:123")
+        """
+        return f"{self.STOCK_INFO_KEY_PREFIX}{stock_id}"
+
+    async def set_stock_price(
+        self, stock_id: int, symbol: str, price: float, source: int = 1
+    ) -> bool:
+        """Update stock price in cache.
+
+        Uses HSET (atomic operation) to update all fields.
+
+        Args:
+            stock_id: Stock primary key ID
+            symbol: Stock symbol (e.g., '006208')
             price: Current price
+            source: Data source (1=Fugle, 2=YFinance, default=1)
 
         Returns:
             True if successful
         """
         try:
             client = await self._get_client()
-            key = self._stock_info_key(symbol)
+            key = self._stock_info_key(stock_id)
             timestamp = int(time.time())
 
-            # HSET is atomic - updates both fields in single operation
-            await client.hset(key, mapping={"price": str(price), "updated_at": timestamp})
+            # HSET is atomic - updates all fields in single operation
+            await client.hset(
+                key,
+                mapping={
+                    "symbol": symbol,
+                    "price": str(price),
+                    "updated_at": timestamp,
+                    "source": str(source),
+                },
+            )
             return True
         except RedisError as exc:
             raise BizException(
                 ErrorCode.REDIS_OPERATION_ERROR,
-                f"Failed to set stock price for {symbol}: {exc}",
+                f"Failed to set stock price for stock_id {stock_id}: {exc}",
             ) from exc
 
-    async def get_stock_price(self, symbol: str) -> Optional[float]:
+    async def get_stock_price(self, stock_id: int) -> Optional[float]:
         """Get cached stock price.
 
         Args:
-            symbol: Stock symbol
+            stock_id: Stock primary key ID
 
         Returns:
             Cached price or None if not found
         """
         try:
             client = await self._get_client()
-            key = self._stock_info_key(symbol)
+            key = self._stock_info_key(stock_id)
             price_str = await client.hget(key, "price")
 
             if price_str is None:
                 return None
 
+            # Decode bytes to string if needed (ARQ pool doesn't use decode_responses)
+            if isinstance(price_str, bytes):
+                price_str = price_str.decode("utf-8")
+
             return float(price_str)
         except RedisError as exc:
             raise BizException(
                 ErrorCode.REDIS_OPERATION_ERROR,
-                f"Failed to get stock price for {symbol}: {exc}",
+                f"Failed to get stock price for stock_id {stock_id}: {exc}",
             ) from exc
         except ValueError as exc:
             raise BizException(
                 ErrorCode.REDIS_OPERATION_ERROR,
-                f"Invalid cached price for {symbol}: {exc}",
+                f"Invalid cached price for stock_id {stock_id}: {exc}",
             ) from exc
 
-    async def get_stock_info(self, symbol: str) -> Optional[dict]:
+    async def get_stock_info(self, stock_id: int) -> Optional[dict]:
         """Get full stock info from cache.
 
         Args:
-            symbol: Stock symbol
+            stock_id: Stock primary key ID
 
         Returns:
-            Dict with 'price' and 'updated_at' or None if not found
+            Dict with 'symbol', 'price', 'updated_at', and 'source' or None if not found
+            - Returns None if price/updated_at missing (incomplete cache)
+            - Source defaults to 1 (Fugle) for backward compatibility
         """
         try:
             client = await self._get_client()
-            key = self._stock_info_key(symbol)
+            key = self._stock_info_key(stock_id)
             info = await client.hgetall(key)
 
             if not info:
                 return None
 
-            # Convert types
+            # Decode bytes to strings if needed (ARQ pool doesn't use decode_responses)
+            decoded_info = {}
+            for k, v in info.items():
+                # Decode key
+                key_str = k.decode("utf-8") if isinstance(k, bytes) else k
+                # Decode value
+                val_str = v.decode("utf-8") if isinstance(v, bytes) else v
+                decoded_info[key_str] = val_str
+
+            # Check if essential fields exist (price and updated_at)
+            if "price" not in decoded_info or "updated_at" not in decoded_info:
+                # Incomplete cache - return None to trigger update
+                # But preserve symbol and source if available for batch task routing
+                if "symbol" in decoded_info and "source" in decoded_info:
+                    # Return dict with only symbol/source (special case for startup)
+                    return {
+                        "symbol": decoded_info["symbol"],
+                        "source": int(decoded_info["source"]),
+                        "incomplete": True,
+                    }
+                return None
+
+            # Convert types with backward compatibility for missing source field
             return {
-                "price": float(info["price"]),
-                "updated_at": int(info["updated_at"]),
+                "symbol": decoded_info.get("symbol", ""),
+                "price": float(decoded_info["price"]),
+                "updated_at": int(decoded_info["updated_at"]),
+                "source": int(decoded_info.get("source", "1")),  # Default to Fugle (1) if missing
             }
         except RedisError as exc:
             raise BizException(
                 ErrorCode.REDIS_OPERATION_ERROR,
-                f"Failed to get stock info for {symbol}: {exc}",
+                f"Failed to get stock info for stock_id {stock_id}: {exc}",
             ) from exc
         except (ValueError, KeyError) as exc:
             raise BizException(
                 ErrorCode.REDIS_OPERATION_ERROR,
-                f"Invalid cached data for {symbol}: {exc}",
+                f"Invalid cached data for stock_id {stock_id}: {exc}",
             ) from exc
 
-    async def delete_stock_info(self, symbol: str) -> bool:
+    async def delete_stock_info(self, stock_id: int) -> bool:
         """Delete stock info from cache.
 
         Args:
-            symbol: Stock symbol
+            stock_id: Stock primary key ID
 
         Returns:
             True if deleted, False if not found
         """
         try:
             client = await self._get_client()
-            key = self._stock_info_key(symbol)
+            key = self._stock_info_key(stock_id)
             result = await client.delete(key)
             return result == 1
         except RedisError as exc:
             raise BizException(
                 ErrorCode.REDIS_OPERATION_ERROR,
-                f"Failed to delete stock info for {symbol}: {exc}",
+                f"Failed to delete stock info for stock_id {stock_id}: {exc}",
             ) from exc
 
-    async def get_stocks_updated_since(self, threshold_seconds: int) -> list[str]:
+    async def get_stocks_updated_since(
+        self, stock_ids: list[int], threshold_seconds: int
+    ) -> list[int]:
         """Get stocks updated within threshold.
 
         Useful for finding recently updated stock prices.
 
         Args:
+            stock_ids: List of stock IDs to check
             threshold_seconds: Only return stocks updated within this many seconds
 
         Returns:
-            List of stock symbols updated recently
+            List of stock IDs updated recently
         """
         try:
-            active_stocks = await self.get_active_stocks()
-            recent_stocks = []
+            recent_stock_ids = []
             cutoff_time = int(time.time()) - threshold_seconds
 
-            for symbol in active_stocks:
-                info = await self.get_stock_info(symbol)
-                if info and info["updated_at"] >= cutoff_time:
-                    recent_stocks.append(symbol)
+            for stock_id in stock_ids:
+                info = await self.get_stock_info(stock_id)
+                if info and not info.get("incomplete") and info["updated_at"] >= cutoff_time:
+                    recent_stock_ids.append(stock_id)
 
-            return recent_stocks
+            return recent_stock_ids
         except RedisError as exc:
             raise BizException(
                 ErrorCode.REDIS_OPERATION_ERROR,
                 f"Failed to get recently updated stocks: {exc}",
+            ) from exc
+
+    async def batch_set_stock_prices(
+        self, stock_data: list[tuple[int, str, float, int]]
+    ) -> int:
+        """Batch update multiple stock prices using Redis Pipeline.
+
+        Reduces network I/O by executing all HSET commands in single round-trip.
+
+        Args:
+            stock_data: List of tuples (stock_id, symbol, price, source)
+                - stock_id: Stock primary key ID
+                - symbol: Stock symbol (e.g., '006208')
+                - price: Current price
+                - source: Data source (1=Fugle, 2=YFinance)
+
+        Returns:
+            Number of stocks successfully updated
+
+        Raises:
+            BizException: On Redis operation errors
+        """
+        try:
+            client = await self._get_client()
+            timestamp = int(time.time())
+
+            # Create pipeline for batch operations
+            pipeline = client.pipeline()
+
+            for stock_id, symbol, price, source in stock_data:
+                key = self._stock_info_key(stock_id)
+                # Add HSET command to pipeline (no execution yet)
+                pipeline.hset(
+                    key,
+                    mapping={
+                        "symbol": symbol,
+                        "price": str(price),
+                        "updated_at": timestamp,
+                        "source": str(source),
+                    },
+                )
+
+            # Execute all commands in single network round-trip
+            results = await pipeline.execute()
+
+            # Return count of successful updates
+            return len(results)
+        except RedisError as exc:
+            raise BizException(
+                ErrorCode.REDIS_OPERATION_ERROR,
+                f"Failed to batch set stock prices: {exc}",
             ) from exc

@@ -35,7 +35,7 @@ class IntradayQuoteResponse(BaseModel):
     lowPrice: Decimal | None = Field(None, description="最低價")
     previousClose: Decimal | None = Field(None, description="昨收價")
     total: dict[str, Any] | None = Field(None, description="交易統計")
-    isClose: bool = Field(..., description="是否收盤")
+    isClose: bool | None = Field(None, description="是否收盤")
 
 
 class TickerResponse(BaseModel):

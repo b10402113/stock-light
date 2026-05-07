@@ -205,11 +205,15 @@ class TestWorkerSettings:
 
     def test_cron_jobs_configured(self):
         """Test that cron jobs are properly configured."""
-        assert len(WorkerSettings.cron_jobs) == 1
+        assert len(WorkerSettings.cron_jobs) == 2
 
-        # Verify cron job runs every minute
-        cron_job = WorkerSettings.cron_jobs[0]
-        assert cron_job.minute == set(range(60))
+        # Verify master task cron job runs every minute
+        master_cron = WorkerSettings.cron_jobs[0]
+        assert master_cron.minute == set(range(60))
+
+        # Verify persistence task cron job runs every 15 minutes
+        persist_cron = WorkerSettings.cron_jobs[1]
+        assert persist_cron.minute == {0, 15, 30, 45}
 
     def test_functions_registered(self):
         """Test that task functions are registered."""
