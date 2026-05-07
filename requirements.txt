@@ -21,6 +21,7 @@ httpx>=0.27.0
 tenacity>=8.0.0
 fugle-marketdata>=0.1.0
 yfinance>=0.2.0
+aiolimiter>=1.0.0  # Async rate limiting for Fugle API
 
 # Task Queue
 celery>=5.4.0
