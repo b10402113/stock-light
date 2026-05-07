@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     REDIS_TIMEOUT: int = 5  # seconds
 
+    # ARQ (Async Job Queue)
+    ARQ_JOB_TIMEOUT: int = 300  # seconds
+    ARQ_MAX_TRIES: int = 3
+    STOCK_UPDATE_INTERVAL: int = 300  # seconds (5 minutes)
+    STOCK_BATCH_SIZE: int = 50  # stocks per batch
+
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"

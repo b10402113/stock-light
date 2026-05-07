@@ -1,0 +1,1 @@
+"""ARQ task module for stock price updates."""

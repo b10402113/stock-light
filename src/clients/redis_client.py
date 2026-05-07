@@ -29,10 +29,18 @@ class StockRedisClient:
     ACTIVE_STOCKS_KEY = "stocks:active"
     STOCK_INFO_KEY_PREFIX = "stock:info:"
 
-    def __init__(self, redis_url: str = None, timeout: int = None):
+    def __init__(self, redis_url: str = None, timeout: int = None, pool: Redis = None):
+        """Initialize Redis client.
+
+        Args:
+            redis_url: Redis connection URL (used if pool not provided)
+            timeout: Connection timeout in seconds
+            pool: External Redis connection pool (e.g., from ARQ)
+        """
         self.redis_url = redis_url or settings.REDIS_URL
         self.timeout = timeout or settings.REDIS_TIMEOUT
-        self._client: Optional[Redis] = None
+        self._client: Optional[Redis] = pool
+        self._external_pool = pool is not None  # Track if pool is externally provided
 
     async def _get_client(self) -> Redis:
         """Get or create Redis connection."""
@@ -47,8 +55,11 @@ class StockRedisClient:
         return self._client
 
     async def close(self):
-        """Close Redis connection."""
-        if self._client:
+        """Close Redis connection.
+
+        Only closes connections created internally. External pools are not closed.
+        """
+        if self._client and not self._external_pool:
             await self._client.aclose()
             self._client = None
 

@@ -1,67 +1,82 @@
 # Current Feature
 
-## Phase 1: Redis 資料結構與環境設計
-
 ## Status
 
-Complete
+In Progress
+
+## Feature
+
+Phase 2: 智慧分批與 Master Task 開發 (ARQ Cron)
 
 ## Goals
 
-- 建立高效的鍵值對儲存機制，避免 Race Condition
-- 實作 Active 股票清單 (Redis Set: `stocks:active`)
-- 實作股票價格快取 (Redis Hash: `stock:info:{ticker}`)
-- 配置 Redis 環境與連線管理
-- 安裝必要套件: fastapi, arq, redis, yfinance
+- Set up ARQ cron job running every minute to trigger stock price updates
+- Implement master task that identifies stocks needing updates (updated_at >= 5 minutes old)
+- Split update candidates into batches of 50 stocks per chunk
+- Dispatch batch jobs to ARQ workers using enqueue_job
+- Integrate with Phase 1 Redis infrastructure (StockRedisClient)
 
 ## Notes
 
-### Redis 資料結構設計
-
-**Active 股票清單**
-- Key: `stocks:active`
-- Type: Redis Set
-- 用途: 儲存所有需要監控的股票代碼
-- 操作: SADD, SREM, SMEMBERS
-
-**股票價格快取**
-- Key Pattern: `stock:info:{ticker}`
-- Type: Redis Hash
-- Fields:
-  - `price`: 當前價格 (float)
-  - `updated_at`: 最後更新的 Unix Timestamp (int)
-- 操作: HSET, HGET, HGETALL
-
-### Race Condition 防護策略
-
-- 使用 Redis atomic operations (SADD, HSET)
-- 單一 Worker 負責價格更新 (避免多 Worker 同時寫入)
-- 套件選擇: `arq` (基於 Redis 的 async job queue)
-
-### Implementation Files
-
-- `src/clients/redis_client.py` - Redis client wrapper
-- `src/config.py` - Add Redis connection settings
-- `requirements.txt` - Add redis, arq dependencies
-
-### Package Installation
-
-```bash
-pip install redis arq
-```
-
-Note: `fastapi` and `yfinance` are already installed
+- Master task function: `update_stock_prices_master`
+- Sub-task function: `update_stock_prices_batch` (will be implemented in Phase 3)
+- Batch size: 50 stocks per chunk
+- Update interval threshold: 300 seconds (5 minutes)
+- Uses Redis keys from Phase 1: `stocks:active` and `stock:{symbol}`
+- Domain self-containment: tasks module owns its config and worker setup
 
 ## Implementation Files
 
-- src/clients/redis_client.py - Redis client wrapper for stock data caching
-- src/config.py - Add Redis connection settings (REDIS_URL, REDIS_TIMEOUT)
-- requirements.txt - Add redis>=5.0.0, arq>=0.25.0
-- tests/test_redis_client.py - Unit tests for Redis operations
+- `src/tasks/__init__.py` - Module initialization
+- `src/tasks/config.py` - ARQ Redis connection and job settings
+- `src/tasks/worker.py` - WorkerSettings class with cron and task functions
+- `src/config.py` - Add ARQ-related settings (REDIS_HOST, ARQ_JOB_TIMEOUT, etc.)
+- `tests/tasks/test_worker.py` - Unit tests for master task logic
+
+## Spec File
+
+@context/features/phase2-arq-cron-master-task.md
+
+## Implementation Files
 
 ## History
 
-- 2026-05-06: Phase 1 - Redis 資料結構與環境設計
+- 2026-05-07: Phase 2 - 智慧分批與 Master Task 開發 (ARQ Cron)
+  - Added ARQ settings to src/config.py:
+    - ARQ_JOB_TIMEOUT (default: 300 seconds)
+    - ARQ_MAX_TRIES (default: 3)
+    - STOCK_UPDATE_INTERVAL (default: 300 seconds / 5 minutes)
+    - STOCK_BATCH_SIZE (default: 50 stocks per batch)
+  - Created src/tasks/ module with domain self-containment principle
+  - Created src/tasks/config.py for ARQ Redis connection configuration
+    - get_redis_settings() parses REDIS_URL to create RedisSettings
+    - Uses existing REDIS_URL and REDIS_TIMEOUT from Phase 1
+  - Created src/tasks/worker.py with WorkerSettings and task functions:
+    - update_stock_prices_master: Master task running every minute via cron
+      - Fetches active stocks from Redis (stocks:active)
+      - Checks each stock's updated_at timestamp
+      - Identifies stocks needing updates (>= 5 minutes old or no record)
+      - Splits into batches of 50 stocks per chunk
+      - Dispatches batch jobs using enqueue_job
+    - update_stock_prices_batch: Placeholder for Phase 3 implementation
+    - WorkerSettings class with cron configuration and job settings
+    - Proper error handling and logging throughout
+    - try-finally block ensures Redis client is always closed
+  - Wrote 9 unit tests for master task logic:
+    - Test no dispatch when no active stocks
+    - Test correct identification of stocks needing updates
+    - Test batch splitting for large stock lists
+    - Test error handling continues on Redis failure
+    - Test Redis connection failure logged
+    - Test no dispatch when all stocks recently updated
+    - Test cron jobs configuration
+    - Test task functions registered
+    - Test WorkerSettings attributes
+  - All 9 Phase 2 tests passing
+  - Integration with Phase 1 StockRedisClient
+  - Follows domain self-containment: tasks module owns config and worker setup
+
+- 2026-05-07: Phase 1 - Redis 資料結構與環境設計
   - Added arq>=0.25.0 to requirements.txt for async job queue
   - Added REDIS_TIMEOUT setting to config.py (5 seconds default)
   - Created StockRedisClient in src/clients/redis_client.py
@@ -79,12 +94,14 @@ Note: `fastapi` and `yfinance` are already installed
   - Added Redis error codes to ErrorCode enum:
     - REDIS_CONNECTION_ERROR (504)
     - REDIS_OPERATION_ERROR (505)
-  - Wrote 23 comprehensive unit tests with mocked Redis
+  - Wrote 23 integration tests with real Redis connection
+  - Wrote 6 mock tests for error scenarios
   - All tests passing (62 tests including stocks router and client tests)
   - Race condition prevention: atomic Redis operations (SADD, HSET)
-  - Redis client moved to src/clients/ following existing client organization
+  - Used aclose() for async connection closing
+  - Clean Redis state before/after each test using SCAN pattern matching
 
-- 2026-05-06: Add Source Field to Stock Model
+- 2026-05-06: Add Source and Market Fields to Stock Model
   - Added `source` field to Stock model to track data origin (Fugle vs YFinance)
   - Added `market` field to Stock model to track stock market type (Taiwan vs US)
   - Created StockSource IntEnum with FUGLE=1 and YFINANCE=2 values
