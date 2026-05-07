@@ -12,6 +12,20 @@ Not Started
 
 ## History
 
+- 2026-05-07: Phase 3 - 高效抓取外部 API 並寫回 Redis
+  - Modified Redis structure to use stock_id as key instead of symbol
+  - Redis hash `stock:info:{stock_id}` stores: symbol, price, updated_at, source
+  - Implemented batch task with source-based API routing (Fugle/YFinance)
+  - Added YFinanceClient.get_current_price() method
+  - Added StockRedisClient.batch_set_stock_prices() using Pipeline (20x performance improvement)
+  - Implemented persist_redis_to_database cron job (15-minute interval)
+  - Added configurable cron schedules via .env (CRON_MASTER_MINUTES, CRON_PERSIST_MINUTES)
+  - Worker startup loads stock_id + symbol + source from database to Redis
+  - Fixed Fugle API schema: made isClose field optional
+  - Comprehensive error handling: skip failed stocks, retry batch on Redis errors
+  - Bytes decoding support for ARQ Redis pool compatibility
+  - All tests passing (9/9 worker tests)
+
 - 2026-05-07: Phase 2 - 智慧分批與 Master Task 開發 (ARQ Cron)
   - Added ARQ settings to src/config.py (job timeout, retries, batch size, update interval)
   - Created src/tasks/ module following domain self-containment principle
