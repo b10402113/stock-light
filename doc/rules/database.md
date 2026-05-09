@@ -37,7 +37,13 @@
 - 嚴禁 `SELECT *`，只抓取必要欄位。
 - 採用 Batch Insert 寫入。
 
-## 遷移 (Alembic)
+## Migrations (Alembic)
 
-- 生成指令：`alembic init -t async migrations`
-- 檔案命名：`2026-04-14_add_post_content_idx.py`
+- Migrations must be static and reversible
+- Use async template: `alembic init -t async migrations`
+- Descriptive filenames:
+  ```ini
+  # alembic.ini
+  file_template = %%(year)d-%%(month).2d-%%(day).2d_%%(slug)s
+  ```
+  → `2026-04-14_add_post_content_idx.py`
