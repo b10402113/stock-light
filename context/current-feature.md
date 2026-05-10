@@ -1,42 +1,16 @@
-# Indicator Subscription Enhancement
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Add title, message, signal_type fields to IndicatorSubscription model
-- Enrich API responses with stock details (symbol, name, price, change_percent)
-- Integrate quota validation with Plan-level limits
-- Implement unified list endpoint for all subscription types
-- Apply keyset pagination for list queries (no OFFSET)
-- Create database migration for new fields (NOT NULL with DEFAULT)
-- Update schemas, service, and router for new functionality
+<!-- Goals will be populated when loading a feature -->
 
 ## Notes
 
-### Database Constraints
-- Primary key: BIGSERIAL (auto-increment)
-- No NULL allowed - use empty string or 0 for business empty values
-- Soft delete required: is_deleted + updated_at trigger
-- New fields: title (VARCHAR 50), message (VARCHAR 200), signal_type ('buy'|'sell')
-
-### Quota Limits by Level
-- Level 1 (Regular): 10 subscriptions, 1 condition per alert
-- Level 2 (Pro): 50 subscriptions, 3 conditions per alert
-- Level 3 (Pro Max): 100 subscriptions, unlimited conditions
-- Level 4 (Admin): Unlimited
-
-### Cross-module Dependencies
-- stocks_service: get stock details and current price
-- plans_service: check user quota limits
-- Strict layering: router → service → model/client
-
-### Response Format
-- Follow existing Response[T] pattern
-- Stock nested in response with brief info
-- Unified list endpoint distinguishes by subscription_type field
+<!-- Notes will be populated when loading a feature -->
 
 ## History
 
