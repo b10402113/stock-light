@@ -246,19 +246,20 @@ class SubscriptionService:
         if not stock or stock.is_deleted or not stock.is_active:
             raise ValueError(f"Stock not found or inactive: {data.stock_id}")
 
-        # Check for duplicate
-        is_duplicate = await SubscriptionService.check_duplicate(
-            db,
-            user_id,
-            data.stock_id,
-            data.indicator_type.value,
-            data.operator.value,
-            data.target_value,
-        )
-        if is_duplicate:
-            raise ValueError(
-                f"Duplicate subscription already exists for this condition"
+        # Check for duplicate (only for single conditions)
+        if data.indicator_type and data.operator and data.target_value:
+            is_duplicate = await SubscriptionService.check_duplicate(
+                db,
+                user_id,
+                data.stock_id,
+                data.indicator_type.value,
+                data.operator.value,
+                data.target_value,
             )
+            if is_duplicate:
+                raise ValueError(
+                    f"Duplicate subscription already exists for this condition"
+                )
 
         subscription = IndicatorSubscription(
             user_id=user_id,
@@ -266,9 +267,9 @@ class SubscriptionService:
             title=data.title,
             message=data.message,
             signal_type=data.signal_type.value,
-            indicator_type=data.indicator_type.value,
-            operator=data.operator.value,
-            target_value=data.target_value,
+            indicator_type=data.indicator_type.value if data.indicator_type else None,
+            operator=data.operator.value if data.operator else None,
+            target_value=data.target_value if data.target_value else None,
             compound_condition=data.compound_condition.model_dump(mode="json") if data.compound_condition else None,
         )
         db.add(subscription)

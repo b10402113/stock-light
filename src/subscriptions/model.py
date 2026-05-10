@@ -24,9 +24,9 @@ class IndicatorSubscription(Base):
     title: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     message: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     signal_type: Mapped[str] = mapped_column(String(10), nullable=False, default="buy")
-    indicator_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    operator: Mapped[str] = mapped_column(String(10), nullable=False)
-    target_value: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
+    indicator_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    operator: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    target_value: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
     compound_condition: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_triggered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     cooldown_end_at: Mapped[datetime | None] = mapped_column(
@@ -42,19 +42,25 @@ class IndicatorSubscription(Base):
     )
 
     __table_args__ = (
-        Index("indicator_subscriptions_user_id_idx", "user_id"),
-        Index("indicator_subscriptions_stock_id_idx", "stock_id"),
-        Index("indicator_subscriptions_is_active_idx", "is_active"),
-        Index("indicator_subscriptions_user_stock_idx", "user_id", "stock_id"),
         Index(
-            "indicator_subscriptions_user_indicator_key",
+            "idx_indicator_subs_on_stock_active",
+            "stock_id",
+            postgresql_where="(is_active = true AND is_deleted = false)"
+        ),
+        Index(
+            "idx_indicator_subs_on_user",
+            "user_id",
+            postgresql_where="(is_deleted = false)"
+        ),
+        Index(
+            "uix_user_stock_single_condition",
             "user_id",
             "stock_id",
             "indicator_type",
             "operator",
             "target_value",
             unique=True,
-            postgresql_where="is_deleted = false",
+            postgresql_where="(is_deleted = false AND compound_condition IS NULL)"
         ),
     )
 

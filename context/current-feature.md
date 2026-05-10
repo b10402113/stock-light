@@ -1,16 +1,38 @@
-# Current Feature
+# Current Feature: Compound Condition Model Fix
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-<!-- Goals will be populated when loading a feature -->
+- ✅ Change `indicator_type`, `operator`, `target_value` to `nullable=True` in model.py
+- ✅ Remove redundant indexes: `is_active_idx`, `user_id_idx`, `stock_id_idx`
+- ✅ Add `idx_indicator_subs_on_stock_active` partial index for price trigger queries
+- ✅ Add `idx_indicator_subs_on_user` partial index for user list queries
+- ✅ Update unique constraint to only apply to single conditions (where compound_condition IS NULL)
+- ✅ Create database migration for nullable changes and index restructuring
+- ✅ Update schema.py if needed for nullable field validation
+- ✅ Update service.py to handle nullable single condition fields
+- ✅ Update tests for nullable field scenarios
 
 ## Notes
 
-<!-- Notes will be populated when loading a feature -->
+- **is_deleted field**: Already defined in Base model (src/models/base.py:26-30), inherited by IndicatorSubscription. No changes needed.
+- **Why nullable**: When storing compound_condition, single condition fields (indicator_type/operator/target_value) should be NULL to avoid fake values.
+- **Index optimization rationale**:
+  - Boolean indexes ineffective (low cardinality)
+  - B-Tree leftmost prefix: (user_id, stock_id) covers user_id queries
+  - Price trigger query needs: stock_id + is_active + is_deleted → partial index
+- **Unique constraint scope**: Only enforce uniqueness for single conditions (compound_condition IS NULL)
+- **Migration safety**: Existing single condition data keeps values, no data loss
+
+## References
+
+- src/subscriptions/model.py:27-29 - Current nullable=False fields
+- src/subscriptions/model.py:44-59 - Current index definitions
+- src/subscriptions/schema.py - May need Optional fields
+- docs/rules/database.md - Index strategy guidelines
 
 ## History
 
