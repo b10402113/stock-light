@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.config import settings
-from src.tasks.worker import update_stock_prices_master, WorkerSettings
+from src.tasks.worker import update_stock_prices_master, DefaultWorkerSettings
 
 
 @pytest.mark.asyncio
@@ -21,7 +21,7 @@ class TestUpdateStockPricesMaster:
         ctx = {"redis": mock_redis}
 
         # Mock Redis client to return empty active stocks
-        with patch("src.tasks.worker.StockRedisClient") as mock_client_class:
+        with patch("src.tasks.jobs.price_update_jobs.StockRedisClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
             mock_client.get_active_stocks.return_value = []
@@ -47,7 +47,7 @@ class TestUpdateStockPricesMaster:
         # Mock stock info - first stock is old, second is recent, third has no record
         current_time = int(time.time())
 
-        with patch("src.tasks.worker.StockRedisClient") as mock_client_class:
+        with patch("src.tasks.jobs.price_update_jobs.StockRedisClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
             mock_client.get_active_stocks.return_value = active_stocks
@@ -92,7 +92,7 @@ class TestUpdateStockPricesMaster:
 
         current_time = int(time.time())
 
-        with patch("src.tasks.worker.StockRedisClient") as mock_client_class:
+        with patch("src.tasks.jobs.price_update_jobs.StockRedisClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
             mock_client.get_active_stocks.return_value = active_stocks
@@ -124,7 +124,7 @@ class TestUpdateStockPricesMaster:
         active_stocks = ["2330.TW", "2454.TW", "1101.TW"]
         current_time = int(time.time())
 
-        with patch("src.tasks.worker.StockRedisClient") as mock_client_class:
+        with patch("src.tasks.jobs.price_update_jobs.StockRedisClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
             mock_client.get_active_stocks.return_value = active_stocks
@@ -158,7 +158,7 @@ class TestUpdateStockPricesMaster:
         mock_redis = MagicMock()
         ctx = {"redis": mock_redis}
 
-        with patch("src.tasks.worker.StockRedisClient") as mock_client_class:
+        with patch("src.tasks.jobs.price_update_jobs.StockRedisClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
 
@@ -182,7 +182,7 @@ class TestUpdateStockPricesMaster:
         active_stocks = ["2330.TW", "2454.TW"]
         current_time = int(time.time())
 
-        with patch("src.tasks.worker.StockRedisClient") as mock_client_class:
+        with patch("src.tasks.jobs.price_update_jobs.StockRedisClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
             mock_client.get_active_stocks.return_value = active_stocks
@@ -200,36 +200,42 @@ class TestUpdateStockPricesMaster:
             assert mock_redis.enqueue_job.call_count == 0
 
 
-class TestWorkerSettings:
-    """Tests for WorkerSettings configuration."""
+class TestDefaultWorkerSettings:
+    """Tests for DefaultWorkerSettings configuration."""
 
     def test_cron_jobs_configured(self):
         """Test that cron jobs are properly configured."""
-        assert len(WorkerSettings.cron_jobs) == 2
+        assert len(DefaultWorkerSettings.cron_jobs) == 4
 
-        # Verify master task cron job runs every minute
-        master_cron = WorkerSettings.cron_jobs[0]
-        assert master_cron.minute == set(range(60))
+        # Verify master task cron job runs every 5 minutes
+        master_cron = DefaultWorkerSettings.cron_jobs[0]
+        assert master_cron.minute == set(range(0, 60, 5))
 
-        # Verify persistence task cron job runs every 15 minutes
-        persist_cron = WorkerSettings.cron_jobs[1]
-        assert persist_cron.minute == {0, 15, 30, 45}
+        # Verify persistence task cron job runs every 1 minute
+        persist_cron = DefaultWorkerSettings.cron_jobs[1]
+        assert persist_cron.minute == set(range(60))
 
     def test_functions_registered(self):
         """Test that task functions are registered."""
-        assert update_stock_prices_master in WorkerSettings.functions
-        assert "update_stock_prices_batch" in [
-            f.__name__ for f in WorkerSettings.functions
+        assert update_stock_prices_master in DefaultWorkerSettings.functions
+        expected_functions = [
+            "update_stock_prices_master",
+            "persist_redis_to_database",
+            "sync_active_stocks_to_redis",
+            "process_scheduled_reminders",
         ]
+        actual_functions = [f.__name__ for f in DefaultWorkerSettings.functions]
+        for expected in expected_functions:
+            assert expected in actual_functions
 
     def test_worker_settings_attributes(self):
-        """Test that WorkerSettings has required attributes."""
-        assert hasattr(WorkerSettings, "redis_settings")
-        assert hasattr(WorkerSettings, "job_timeout")
-        assert hasattr(WorkerSettings, "max_tries")
-        assert hasattr(WorkerSettings, "on_startup")
-        assert hasattr(WorkerSettings, "on_shutdown")
+        """Test that DefaultWorkerSettings has required attributes."""
+        assert hasattr(DefaultWorkerSettings, "redis_settings")
+        assert hasattr(DefaultWorkerSettings, "job_timeout")
+        assert hasattr(DefaultWorkerSettings, "max_tries")
+        assert hasattr(DefaultWorkerSettings, "on_startup")
+        assert hasattr(DefaultWorkerSettings, "on_shutdown")
 
         # Verify settings match config
-        assert WorkerSettings.job_timeout == settings.ARQ_JOB_TIMEOUT
-        assert WorkerSettings.max_tries == settings.ARQ_MAX_TRIES
+        assert DefaultWorkerSettings.job_timeout == settings.ARQ_JOB_TIMEOUT
+        assert DefaultWorkerSettings.max_tries == settings.ARQ_MAX_TRIES

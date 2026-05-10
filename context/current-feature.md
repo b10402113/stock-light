@@ -1,16 +1,47 @@
-# Current Feature
+# Current Feature: Scheduled Reminder Subscription
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-<!-- Goals will be populated when loading a feature -->
+- Create `scheduled_reminders` database table with proper model (BIGSERIAL, no NULL, soft delete)
+- Add `FrequencyType` enum (daily/weekly/monthly) and Pydantic schemas
+- Implement API endpoints: POST/GET/PATCH/DELETE `/subscriptions/reminders`
+- Implement service layer with `calculate_next_trigger_time` function
+- Add scheduler integration for processing due reminders
+- Integrate with Plan-level quota validation
+- Add tests for reminder functionality
 
 ## Notes
 
-<!-- Notes will be populated when loading a feature -->
+**Subscription Type**: Scheduled Reminder triggers at scheduled times regardless of indicator conditions.
+
+**Database Design**:
+- `frequency_type`: 'daily', 'weekly', 'monthly' (預設 'daily')
+- `reminder_time`: Time of day (預設 '17:00:00')
+- `day_of_week`: 0-6 for weekly, 0 for non-weekly
+- `day_of_month`: 1-28 for monthly, 0 for non-monthly
+- `last_triggered_at`: 上次觸發時間 (預設 '1970-01-01' as sentinel)
+- `next_trigger_at`: Calculated next trigger timestamp
+- Unique constraint on (user_id, stock_id, frequency_type, reminder_time, day_of_week, day_of_month)
+
+**Architecture**:
+- Domain module in `src/subscriptions/` (existing)
+- Scheduler processing in `subscriptions/scheduler.py`
+- Follow strict dependency: router ─► service ─► model/client
+- Keyset pagination (游標分頁, no OFFSET)
+
+**Trigger Calculation**:
+- Daily: tomorrow at reminder_time
+- Weekly: next day_of_week at reminder_time
+- Monthly: next day_of_month at reminder_time
+
+**Frontend Integration**:
+- Subscription type badge (定期提醒)
+- Next trigger time display
+- Frequency indicator (每日/每週/每月)
 
 ## History
 

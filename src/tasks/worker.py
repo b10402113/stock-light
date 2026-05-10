@@ -9,6 +9,7 @@ from src.config import settings
 from src.tasks.config import redis_settings
 from src.tasks.jobs import (
     persist_redis_to_database,
+    process_scheduled_reminders,
     startup,
     shutdown,
     sync_active_stocks_to_redis,
@@ -27,6 +28,7 @@ class DefaultWorkerSettings:
         update_stock_prices_master,
         persist_redis_to_database,
         sync_active_stocks_to_redis,
+        process_scheduled_reminders,
     ]
     on_startup = startup
     on_shutdown = shutdown
@@ -55,6 +57,12 @@ class DefaultWorkerSettings:
         cron(
             sync_active_stocks_to_redis,
             minute=settings.parse_cron_minutes(settings.CRON_SYNC_STOCKS_MINUTES),
+            run_at_startup=False,
+        ),
+        # Process scheduled reminders: schedule configurable via CRON_REMINDER_MINUTES
+        cron(
+            process_scheduled_reminders,
+            minute=settings.parse_cron_minutes(settings.CRON_REMINDER_MINUTES),
             run_at_startup=False,
         ),
     ]

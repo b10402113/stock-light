@@ -15,10 +15,243 @@ from src.subscriptions.schema import (
     IndicatorSubscriptionCreate,
     IndicatorSubscriptionResponse,
     IndicatorSubscriptionUpdate,
+    ScheduledReminderCreate,
+    ScheduledReminderResponse,
+    ScheduledReminderListResponse,
+    ScheduledReminderUpdate,
     SubscriptionListResponse,
 )
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
+
+
+# ============ Scheduled Reminder Endpoints (before /{subscription_id}) ============
+
+
+@router.get(
+    "/reminders",
+    response_model=Response[ScheduledReminderListResponse],
+    summary="取得用戶定期提醒列表",
+    description="取得當前用戶的所有定期提醒（支援 Keyset 分頁）",
+)
+async def list_reminders(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    cursor: Optional[int] = Query(None, description="分頁游標（上一頁最後一筆的 ID）"),
+    limit: int = Query(20, ge=1, le=100, description="每頁數量"),
+) -> Response[ScheduledReminderListResponse]:
+    """List all scheduled reminders for the current user.
+
+    Args:
+        current_user: Current authenticated user
+        db: Database session
+        cursor: Pagination cursor
+        limit: Items per page
+
+    Returns:
+        Response[ScheduledReminderListResponse]: List of reminders with stock details
+    """
+    reminders, next_cursor = await service.ScheduledReminderService.get_user_reminders(
+        db, current_user.id, cursor, limit
+    )
+
+    redis_client = StockRedisClient()
+    response_data = [
+        await service.ScheduledReminderService.enrich_reminder_with_stock(
+            db, reminder, redis_client
+        )
+        for reminder in reminders
+    ]
+    await redis_client.close()
+
+    return Response(
+        data=ScheduledReminderListResponse(
+            data=response_data,
+            next_cursor=next_cursor,
+            has_more=next_cursor is not None,
+        )
+    )
+
+
+@router.post(
+    "/reminders",
+    response_model=Response[ScheduledReminderResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="創建定期提醒",
+    description="為當前用戶創建新的定期提醒",
+)
+async def create_reminder(
+    data: ScheduledReminderCreate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> Response[ScheduledReminderResponse]:
+    """Create a new scheduled reminder.
+
+    Args:
+        data: Reminder creation data
+        current_user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Response[ScheduledReminderResponse]: Created reminder with stock details
+
+    Raises:
+        HTTPException: 403 if quota exceeded, 400 if stock not found or duplicate, 409 if conflict
+    """
+    try:
+        reminder = await service.ScheduledReminderService.create(db, current_user.id, data)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Reminder already exists",
+        )
+    except ValueError as e:
+        if "quota" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(e),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+    redis_client = StockRedisClient()
+    response = await service.ScheduledReminderService.enrich_reminder_with_stock(
+        db, reminder, redis_client
+    )
+    await redis_client.close()
+
+    return Response(data=response)
+
+
+@router.get(
+    "/reminders/{reminder_id}",
+    response_model=Response[ScheduledReminderResponse],
+    summary="取得定期提醒詳細",
+    description="取得特定定期提醒的詳細資訊",
+)
+async def get_reminder(
+    reminder_id: int,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> Response[ScheduledReminderResponse]:
+    """Get a single scheduled reminder.
+
+    Args:
+        reminder_id: Reminder ID
+        current_user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Response[ScheduledReminderResponse]: Reminder details with stock info
+
+    Raises:
+        HTTPException: 404 if reminder not found or not owned by user
+    """
+    reminder = await service.ScheduledReminderService.get_by_id(db, reminder_id)
+    if not reminder or reminder.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reminder not found: {reminder_id}",
+        )
+
+    redis_client = StockRedisClient()
+    response = await service.ScheduledReminderService.enrich_reminder_with_stock(
+        db, reminder, redis_client
+    )
+    await redis_client.close()
+
+    return Response(data=response)
+
+
+@router.patch(
+    "/reminders/{reminder_id}",
+    response_model=Response[ScheduledReminderResponse],
+    summary="更新定期提醒",
+    description="更新定期提醒的標題、訊息、頻率或時間設定",
+)
+async def update_reminder(
+    reminder_id: int,
+    data: ScheduledReminderUpdate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> Response[ScheduledReminderResponse]:
+    """Update a scheduled reminder.
+
+    Args:
+        reminder_id: Reminder ID
+        data: Reminder update data
+        current_user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Response[ScheduledReminderResponse]: Updated reminder with stock details
+
+    Raises:
+        HTTPException: 404 if reminder not found or not owned by user
+    """
+    reminder = await service.ScheduledReminderService.get_by_id(db, reminder_id)
+    if not reminder or reminder.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reminder not found: {reminder_id}",
+        )
+
+    updated = await service.ScheduledReminderService.update(db, reminder, data)
+
+    redis_client = StockRedisClient()
+    response = await service.ScheduledReminderService.enrich_reminder_with_stock(
+        db, updated, redis_client
+    )
+    await redis_client.close()
+
+    return Response(data=response)
+
+
+@router.delete(
+    "/reminders/{reminder_id}",
+    response_model=Response[ScheduledReminderResponse],
+    summary="刪除定期提醒",
+    description="軟刪除定期提醒（標記為已刪除）",
+)
+async def delete_reminder(
+    reminder_id: int,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> Response[ScheduledReminderResponse]:
+    """Soft delete a scheduled reminder.
+
+    Args:
+        reminder_id: Reminder ID
+        current_user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Response[ScheduledReminderResponse]: Deleted reminder with stock details
+
+    Raises:
+        HTTPException: 404 if reminder not found or not owned by user
+    """
+    reminder = await service.ScheduledReminderService.get_by_id(db, reminder_id)
+    if not reminder or reminder.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reminder not found: {reminder_id}",
+        )
+
+    deleted = await service.ScheduledReminderService.soft_delete(db, reminder)
+
+    redis_client = StockRedisClient()
+    response = await service.ScheduledReminderService.enrich_reminder_with_stock(
+        db, deleted, redis_client
+    )
+    await redis_client.close()
+
+    return Response(data=response)
+
+
+# ============ Indicator Subscription Endpoints ============
 
 
 @router.get(

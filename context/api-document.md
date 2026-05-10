@@ -54,6 +54,16 @@ All API responses follow a unified format:
 
 ## Changelog
 
+### v1.10.0 (2026-05-10)
+
+- Added Scheduled Reminders API
+- Create, list, get, update, delete scheduled reminders
+- Support for daily, weekly, monthly frequencies
+- Trigger at scheduled times regardless of indicator conditions
+- Combined quota with indicator subscriptions (Plan-level)
+- Automatic next_trigger_at calculation
+- Scheduler integration for processing due reminders
+
 ### v1.9.0 (2026-05-10)
 
 - Enhanced Indicator Subscription API

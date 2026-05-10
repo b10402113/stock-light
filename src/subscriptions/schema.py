@@ -39,6 +39,13 @@ class SendStatus(StrEnum):
     FAILED = "failed"
 
 
+class FrequencyType(StrEnum):
+    """提醒頻率類型"""
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+
+
 class StockBrief(BaseModel):
     """股票簡要信息"""
 
@@ -103,6 +110,50 @@ class IndicatorSubscriptionResponse(BaseModel):
     updated_at: datetime
 
 
+class ScheduledReminderCreate(BaseModel):
+    """Schema for creating a scheduled reminder"""
+
+    stock_id: int = Field(..., description="Target stock ID")
+    title: str = Field("", max_length=50, description="Reminder title (max 50 chars)")
+    message: str = Field("", max_length=200, description="Reminder message content (max 200 chars)")
+    frequency_type: FrequencyType = Field(FrequencyType.DAILY, description="Frequency type: daily, weekly, monthly")
+    reminder_time: str = Field("17:00", pattern=r"^[0-9]{2}:[0-9]{2}$", description="Time of day (HH:MM format)")
+    day_of_week: int = Field(0, ge=0, le=6, description="Day of week (0-6, Mon-Sun) for weekly")
+    day_of_month: int = Field(0, ge=0, le=28, description="Day of month (1-28) for monthly")
+
+
+class ScheduledReminderUpdate(BaseModel):
+    """Schema for updating a scheduled reminder"""
+
+    title: Optional[str] = Field(None, max_length=50, description="Reminder title")
+    message: Optional[str] = Field(None, max_length=200, description="Reminder message content")
+    frequency_type: Optional[FrequencyType] = Field(None, description="Frequency type")
+    reminder_time: Optional[str] = Field(None, pattern=r"^[0-9]{2}:[0-9]{2}$", description="Time of day (HH:MM)")
+    day_of_week: Optional[int] = Field(None, ge=0, le=6, description="Day of week for weekly")
+    day_of_month: Optional[int] = Field(None, ge=0, le=28, description="Day of month for monthly")
+    is_active: Optional[bool] = Field(None, description="Reminder active status")
+
+
+class ScheduledReminderResponse(BaseModel):
+    """Schema for scheduled reminder response"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    stock: StockBrief
+    subscription_type: str = "reminder"
+    title: str
+    message: str
+    frequency_type: str
+    reminder_time: str
+    day_of_week: int
+    day_of_month: int
+    next_trigger_at: datetime
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 class SubscriptionListRequest(BaseModel):
     """訂閱列表請求"""
 
@@ -115,6 +166,14 @@ class SubscriptionListResponse(BaseModel):
     """Schema for paginated subscription list response"""
 
     data: list[IndicatorSubscriptionResponse]
+    next_cursor: Optional[int] = None
+    has_more: bool = False
+
+
+class ScheduledReminderListResponse(BaseModel):
+    """Schema for paginated scheduled reminder list response"""
+
+    data: list[ScheduledReminderResponse]
     next_cursor: Optional[int] = None
     has_more: bool = False
 

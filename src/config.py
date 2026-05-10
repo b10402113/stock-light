@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # CRON_PERSIST_MINUTES: str = "0,15,30,45"  # Every 15 minutes
     CRON_PERSIST_MINUTES: str = "*/1"  # Every 1 minutes for testing
     CRON_SYNC_STOCKS_MINUTES: str = "*/1"  # Every 5 minutes: sync active stocks to Redis
+    CRON_REMINDER_MINUTES: str = "*/1"  # Every 1 minute: process scheduled reminders
 
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"

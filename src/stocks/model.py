@@ -25,5 +25,8 @@ class Stock(Base):
     subscriptions: Mapped[list["IndicatorSubscription"]] = relationship(
         "IndicatorSubscription", back_populates="stock", lazy="selectin"
     )
+    reminders: Mapped[list["ScheduledReminder"]] = relationship(
+        "ScheduledReminder", back_populates="stock", lazy="selectin"
+    )
 
     __table_args__ = (Index("stocks_is_active_idx", "is_active"),)

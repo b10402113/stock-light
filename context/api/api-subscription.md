@@ -408,3 +408,227 @@ Subscription quota is validated against the user's active Plan level:
 | 4     | Admin   | Unlimited (-1)     | Unlimited                |
 
 ---
+
+## Scheduled Reminders API
+
+Scheduled reminders trigger at configured times regardless of indicator conditions. Supports daily, weekly, and monthly frequencies.
+
+### List Scheduled Reminders
+
+Get all scheduled reminders for the authenticated user with keyset pagination.
+
+**Endpoint**: `GET /subscriptions/reminders`
+
+**Authentication**: Required (JWT Bearer token)
+
+**Query Parameters**:
+
+| Parameter | Type    | Required | Default | Description                                    |
+| --------- | ------- | -------- | ------- | ---------------------------------------------- |
+| cursor    | integer | No       | -       | Pagination cursor (last ID from previous page) |
+| limit     | integer | No       | 20      | Items per page (1-100)                         |
+
+**Response** (200 OK):
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "data": [
+      {
+        "id": 1,
+        "stock": {
+          "id": 123,
+          "symbol": "2330.TW",
+          "name": "台積電",
+          "current_price": 580.5,
+          "change_percent": null
+        },
+        "subscription_type": "reminder",
+        "title": "Daily 2330 Reminder",
+        "message": "Check daily performance",
+        "frequency_type": "daily",
+        "reminder_time": "17:00",
+        "day_of_week": 0,
+        "day_of_month": 0,
+        "next_trigger_at": "2026-05-11T17:00:00Z",
+        "is_active": true,
+        "created_at": "2026-05-10T10:00:00Z",
+        "updated_at": "2026-05-10T10:00:00Z"
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  }
+}
+```
+
+---
+
+### Create Scheduled Reminder
+
+Create a new scheduled reminder. Quota is validated against the user's Plan level (combined with indicator subscriptions).
+
+**Endpoint**: `POST /subscriptions/reminders`
+
+**Authentication**: Required (JWT Bearer token)
+
+**Request Body**:
+
+```json
+{
+  "stock_id": 1,
+  "title": "Weekly 2330 Reminder",
+  "message": "Check weekly performance",
+  "frequency_type": "weekly",
+  "reminder_time": "17:00",
+  "day_of_week": 2
+}
+```
+
+**Request Schema**:
+
+| Field          | Type    | Required | Default  | Constraints                     | Description                   |
+| -------------- | ------- | -------- | -------- | ------------------------------- | ----------------------------- |
+| stock_id       | integer | Yes      | -        | Must reference active stock     | Target stock ID               |
+| title          | string  | No       | ""       | max_length: 50                  | Reminder title                |
+| message        | string  | No       | ""       | max_length: 200                 | Reminder message content      |
+| frequency_type | string  | No       | "daily"  | Enum: daily, weekly, monthly    | Frequency type                |
+| reminder_time  | string  | No       | "17:00"  | Format: HH:MM                   | Time of day to send reminder  |
+| day_of_week    | integer | No       | 0        | 0-6 (Mon-Sun), only for weekly  | Day of week for weekly        |
+| day_of_month   | integer | No       | 0        | 1-28, only for monthly          | Day of month for monthly      |
+
+**Frequency Types**:
+
+| Value    | Description                  |
+| -------- | ---------------------------- |
+| daily    | Triggers daily at set time   |
+| weekly   | Triggers weekly on set day   |
+| monthly  | Triggers monthly on set date |
+
+**Response** (201 Created):
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "stock": {
+      "id": 123,
+      "symbol": "2330.TW",
+      "name": "台積電",
+      "current_price": 580.5,
+      "change_percent": null
+    },
+    "subscription_type": "reminder",
+    "title": "Weekly 2330 Reminder",
+    "message": "Check weekly performance",
+    "frequency_type": "weekly",
+    "reminder_time": "17:00",
+    "day_of_week": 2,
+    "day_of_month": 0,
+    "next_trigger_at": "2026-05-14T17:00:00Z",
+    "is_active": true,
+    "created_at": "2026-05-10T10:00:00Z",
+    "updated_at": "2026-05-10T10:00:00Z"
+  }
+}
+```
+
+**Error Responses**:
+
+| Status | Message                               |
+| ------ | ------------------------------------- |
+| 400    | Stock not found or inactive: {id}     |
+| 400    | Duplicate reminder already exists     |
+| 403    | Subscription quota exceeded: used X/Y |
+| 409    | Reminder already exists               |
+
+---
+
+### Get Scheduled Reminder
+
+Get a single scheduled reminder by ID.
+
+**Endpoint**: `GET /subscriptions/reminders/{reminder_id}`
+
+**Authentication**: Required (JWT Bearer token)
+
+**Path Parameters**:
+
+| Parameter    | Type    | Required | Description  |
+| ------------ | ------- | -------- | ------------ |
+| reminder_id  | integer | Yes      | Reminder ID  |
+
+**Response** (200 OK):
+
+Same as Create response.
+
+**Error Responses**:
+
+| Status | Message                   |
+| ------ | ------------------------- |
+| 404    | Reminder not found: {id}  |
+
+---
+
+### Update Scheduled Reminder
+
+Update reminder title, message, frequency settings, or active status.
+
+**Endpoint**: `PATCH /subscriptions/reminders/{reminder_id}`
+
+**Authentication**: Required (JWT Bearer token)
+
+**Request Body**:
+
+```json
+{
+  "title": "Updated Reminder",
+  "frequency_type": "monthly",
+  "reminder_time": "18:00",
+  "day_of_month": 15
+}
+```
+
+**Request Schema**:
+
+| Field          | Type            | Required | Constraints                     | Description                   |
+| -------------- | --------------- | -------- | ------------------------------- | ----------------------------- |
+| title          | string \| null  | No       | max_length: 50                  | Reminder title                |
+| message        | string \| null  | No       | max_length: 200                 | Reminder message              |
+| frequency_type | string \| null  | No       | Enum: daily, weekly, monthly    | Frequency type                |
+| reminder_time  | string \| null  | No       | Format: HH:MM                   | Time of day                   |
+| day_of_week    | integer \| null | No       | 0-6 (Mon-Sun)                   | Day of week for weekly        |
+| day_of_month   | integer \| null | No       | 1-28                            | Day of month for monthly      |
+| is_active      | boolean \| null | No       | -                               | Active status                 |
+
+**Note**: If frequency settings are updated, `next_trigger_at` is automatically recalculated.
+
+**Response** (200 OK):
+
+Same as Create response.
+
+---
+
+### Delete Scheduled Reminder
+
+Soft delete a scheduled reminder.
+
+**Endpoint**: `DELETE /subscriptions/reminders/{reminder_id}`
+
+**Authentication**: Required (JWT Bearer token)
+
+**Response** (200 OK):
+
+Same as Create response.
+
+**Error Responses**:
+
+| Status | Message                   |
+| ------ | ------------------------- |
+| 404    | Reminder not found: {id}  |
+
+---

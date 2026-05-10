@@ -1,9 +1,9 @@
-"""IndicatorSubscription and NotificationHistory models."""
+"""IndicatorSubscription, ScheduledReminder, and NotificationHistory models."""
 
-from datetime import datetime
+from datetime import datetime, time, timezone
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Time, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -53,6 +53,54 @@ class IndicatorSubscription(Base):
             "indicator_type",
             "operator",
             "target_value",
+            unique=True,
+            postgresql_where="is_deleted = false",
+        ),
+    )
+
+
+class ScheduledReminder(Base):
+    """定期提醒表 - 用戶設定定期股票更新提醒"""
+
+    __tablename__ = "scheduled_reminders"
+
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+    stock_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("stocks.id"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    message: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    frequency_type: Mapped[str] = mapped_column(String(10), nullable=False, default="daily")
+    reminder_time: Mapped[time] = mapped_column(Time, nullable=False, default=time(17, 0))
+    day_of_week: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    day_of_month: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_triggered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime(1970, 1, 1, tzinfo=timezone.utc)
+    )
+    next_trigger_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", lazy="selectin")
+    stock: Mapped["Stock"] = relationship("Stock", back_populates="reminders", lazy="selectin")
+
+    __table_args__ = (
+        Index("scheduled_reminders_user_id_idx", "user_id"),
+        Index("scheduled_reminders_stock_id_idx", "stock_id"),
+        Index("scheduled_reminders_is_active_idx", "is_active"),
+        Index("scheduled_reminders_next_trigger_at_idx", "next_trigger_at"),
+        Index(
+            "scheduled_reminders_user_stock_unique_key",
+            "user_id",
+            "stock_id",
+            "frequency_type",
+            "reminder_time",
+            "day_of_week",
+            "day_of_month",
             unique=True,
             postgresql_where="is_deleted = false",
         ),

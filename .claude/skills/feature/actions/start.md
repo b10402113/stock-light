@@ -5,4 +5,4 @@
 3. Set Status to "In Progress"
 4. Create and checkout the feature branch (derive name from H1 heading)
 5. List the goals, then implement them one by one
-6. Update the @doc/api.md for added APIs
+6. Update the @context/api-document.md for added APIs
