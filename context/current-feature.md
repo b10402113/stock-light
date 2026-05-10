@@ -1,26 +1,16 @@
-# Current Feature: Health Endpoint
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Add a `/health` endpoint to check database and Redis availability
-- Endpoint must be public (no authentication required)
-- Check PostgreSQL connection with `SELECT 1`
-- Check Redis connection using existing `StockRedisClient.ping()` method
-- Return JSON response with status of each component
-- Return HTTP 200 if all healthy, HTTP 503 if any component fails
+<!-- Goals will be populated when loading a feature -->
 
 ## Notes
 
-- Response schema: `{"status": "healthy", "components": {"database": "ok", "redis": "ok"}}`
-- Files to modify:
-  - `src/main.py` - Add `/health` endpoint (public, no router prefix)
-  - `src/dependencies.py` - May need public database session getter (no auth)
-- Use SQLAlchemy async session for database check: `await db.execute(text("SELECT 1"))`
-- Use existing `StockRedisClient.ping()` method from `src/stocks/redis_client.py`
+<!-- Notes will be populated when loading a feature -->
 
 ## History
 
@@ -63,3 +53,11 @@ Complete
   - Removed .TW suffix from stock symbols (Fugle API compatibility)
   - All 9 integration tests passing
   - Redis fixtures clean state before/after each test
+
+- 2026-05-10: Add Health Check Endpoint
+  - Added public /health endpoint (no authentication required)
+  - Check PostgreSQL connection with SELECT 1
+  - Check Redis connection using StockRedisClient.ping()
+  - Return HTTP 200 if healthy, HTTP 503 if unhealthy
+  - Response includes status, version, description, uptime, and component details
+  - Added API documentation for health endpoint
