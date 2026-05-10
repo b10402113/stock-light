@@ -1,29 +1,28 @@
-# Current Feature: Compound Condition Schema
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- ✅ Add `LogicOperator` enum (AND="and", OR="or") to schema.py
-- ✅ Define `Condition` Pydantic model with indicator_type, operator, target_value
-- ✅ Define `CompoundCondition` Pydantic model with logic and conditions list
-- ✅ Update `IndicatorSubscriptionBase`, `IndicatorSubscriptionUpdate`, `IndicatorSubscriptionResponse` to use `Optional[CompoundCondition]`
-- ✅ Add compound condition schema documentation to api-subscription.md
-- ✅ Add validation tests for compound condition structure (updated existing tests)
-- ⏸️ Add quota validation in service.py for max conditions per alert (deferred - LevelConfig not updated)
+<!-- Goals will be populated when loading a feature -->
 
 ## Notes
 
-- Model already uses JSONB storage (`mapped_column(JSONB, nullable=True)`)
-- Reuse existing `Operator` enum (GT, LT, GTE, LTE, EQ, NEQ)
-- Logic values are lowercase ("and", "or") following StrEnum pattern
-- Max 10 conditions per compound condition (hard limit via Pydantic validator)
-- Plan-level quota: Regular=1, Pro=3, Pro Max=10/unlimited, Admin=unlimited
-- Service layer uses `.model_dump(mode="json")` to serialize enums for JSONB storage
+<!-- Notes will be populated when loading a feature -->
 
 ## History
+
+- 2026-05-10: Compound Condition Schema
+  - Added LogicOperator enum (AND="and", OR="or") to schema.py
+  - Defined Condition model with indicator_type, operator, target_value fields
+  - Defined CompoundCondition model with logic, conditions list and max 10 validator
+  - Updated IndicatorSubscriptionBase, Update, Response to use Optional[CompoundCondition]
+  - Added compound condition schema documentation to api-subscription.md
+  - Updated service layer to serialize/deserialize CompoundCondition for JSONB storage
+  - Updated existing tests to use lowercase logic values ("and"/"or")
+  - Added validation tests for empty conditions and nested compound conditions
 
 - 2026-05-10: Scheduled Reminder Subscription
   - Created scheduled_reminders table with FrequencyType enum (daily/weekly/monthly)
