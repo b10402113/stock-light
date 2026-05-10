@@ -1,16 +1,26 @@
-# Current Feature
+# Current Feature: Health Endpoint
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-<!-- Goals will be populated when loading a feature -->
+- Add a `/health` endpoint to check database and Redis availability
+- Endpoint must be public (no authentication required)
+- Check PostgreSQL connection with `SELECT 1`
+- Check Redis connection using existing `StockRedisClient.ping()` method
+- Return JSON response with status of each component
+- Return HTTP 200 if all healthy, HTTP 503 if any component fails
 
 ## Notes
 
-<!-- Notes will be populated when loading a feature -->
+- Response schema: `{"status": "healthy", "components": {"database": "ok", "redis": "ok"}}`
+- Files to modify:
+  - `src/main.py` - Add `/health` endpoint (public, no router prefix)
+  - `src/dependencies.py` - May need public database session getter (no auth)
+- Use SQLAlchemy async session for database check: `await db.execute(text("SELECT 1"))`
+- Use existing `StockRedisClient.ping()` method from `src/stocks/redis_client.py`
 
 ## History
 

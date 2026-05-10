@@ -43,6 +43,7 @@ All API responses follow a unified format:
 
 ## API documentation
 
+- Health: @context/api/api-health.md
 - User: @context/api/api-user.md
 - Stock: @context/api/api-stock.md
 - Oauth: @context/api/api-oauth.md
@@ -51,6 +52,15 @@ All API responses follow a unified format:
 - Watchlist: @context/api/api-watchlist.md
 
 ## Changelog
+
+### v1.7.0 (2026-05-09)
+
+- Added Health Check API
+- Public endpoint for monitoring systems and load balancers
+- Check PostgreSQL connection (SELECT 1)
+- Check Redis connection (ping)
+- HTTP 200 if healthy, HTTP 503 if unhealthy
+- No authentication required
 
 ### v1.6.0 (2026-05-06)
 
