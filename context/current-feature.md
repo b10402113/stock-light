@@ -1,49 +1,30 @@
-# Current Feature: Scheduled Reminder Subscription
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Create `scheduled_reminders` database table with proper model (BIGSERIAL, no NULL, soft delete)
-- Add `FrequencyType` enum (daily/weekly/monthly) and Pydantic schemas
-- Implement API endpoints: POST/GET/PATCH/DELETE `/subscriptions/reminders`
-- Implement service layer with `calculate_next_trigger_time` function
-- Add scheduler integration for processing due reminders
-- Integrate with Plan-level quota validation
-- Add tests for reminder functionality
+<!-- Goals will be populated when loading a feature -->
 
 ## Notes
 
-**Subscription Type**: Scheduled Reminder triggers at scheduled times regardless of indicator conditions.
-
-**Database Design**:
-- `frequency_type`: 'daily', 'weekly', 'monthly' (預設 'daily')
-- `reminder_time`: Time of day (預設 '17:00:00')
-- `day_of_week`: 0-6 for weekly, 0 for non-weekly
-- `day_of_month`: 1-28 for monthly, 0 for non-monthly
-- `last_triggered_at`: 上次觸發時間 (預設 '1970-01-01' as sentinel)
-- `next_trigger_at`: Calculated next trigger timestamp
-- Unique constraint on (user_id, stock_id, frequency_type, reminder_time, day_of_week, day_of_month)
-
-**Architecture**:
-- Domain module in `src/subscriptions/` (existing)
-- Scheduler processing in `subscriptions/scheduler.py`
-- Follow strict dependency: router ─► service ─► model/client
-- Keyset pagination (游標分頁, no OFFSET)
-
-**Trigger Calculation**:
-- Daily: tomorrow at reminder_time
-- Weekly: next day_of_week at reminder_time
-- Monthly: next day_of_month at reminder_time
-
-**Frontend Integration**:
-- Subscription type badge (定期提醒)
-- Next trigger time display
-- Frequency indicator (每日/每週/每月)
+<!-- Notes will be populated when loading a feature -->
 
 ## History
+
+- 2026-05-10: Scheduled Reminder Subscription
+  - Created scheduled_reminders table with FrequencyType enum (daily/weekly/monthly)
+  - Added ScheduledReminder model with proper constraints (BIGSERIAL, no NULL, soft delete)
+  - Implemented ScheduledReminderService with calculate_next_trigger_time logic
+  - Added API endpoints: POST/GET/PATCH/DELETE /subscriptions/reminders
+  - Integrated with Plan-level quota validation (combined with indicator subscriptions)
+  - Added reminder_jobs.py for processing due reminders via ARQ cron
+  - Added CRON_REMINDER_MINUTES config for schedule control
+  - Updated router ordering (literal routes before path parameters)
+  - Added 20 tests covering all endpoints and service logic
+  - Updated API documentation with Scheduled Reminders section
 
 - 2026-05-10: Indicator Subscription Enhancement
   - Added title, message, signal_type fields to IndicatorSubscription model
