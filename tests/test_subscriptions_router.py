@@ -359,7 +359,7 @@ class TestSubscriptionsRouter:
                 "operator": ">",
                 "target_value": "500.0",
                 "compound_condition": {
-                    "logic": "AND",
+                    "logic": "and",
                     "conditions": [
                         {"indicator_type": "rsi", "operator": "<", "target_value": "30"},
                     ],
@@ -370,7 +370,7 @@ class TestSubscriptionsRouter:
 
         assert response.status_code == 201
         data = response.json()
-        assert data["data"]["compound_condition"]["logic"] == "AND"
+        assert data["data"]["compound_condition"]["logic"] == "and"
 
     @pytest.mark.asyncio
     async def test_create_different_indicator_types(

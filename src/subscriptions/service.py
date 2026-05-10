@@ -13,6 +13,7 @@ from src.stocks import service as stocks_service
 from src.stocks.model import Stock
 from src.subscriptions.model import IndicatorSubscription, NotificationHistory, ScheduledReminder
 from src.subscriptions.schema import (
+    CompoundCondition,
     FrequencyType,
     IndicatorSubscriptionCreate,
     IndicatorSubscriptionResponse,
@@ -76,7 +77,9 @@ class SubscriptionService:
             indicator_type=subscription.indicator_type,
             operator=subscription.operator,
             target_value=subscription.target_value,
-            compound_condition=subscription.compound_condition,
+            compound_condition=CompoundCondition.model_validate(subscription.compound_condition)
+            if subscription.compound_condition
+            else None,
             is_triggered=subscription.is_triggered,
             cooldown_end_at=subscription.cooldown_end_at,
             is_active=subscription.is_active,
@@ -266,7 +269,7 @@ class SubscriptionService:
             indicator_type=data.indicator_type.value,
             operator=data.operator.value,
             target_value=data.target_value,
-            compound_condition=data.compound_condition,
+            compound_condition=data.compound_condition.model_dump(mode="json") if data.compound_condition else None,
         )
         db.add(subscription)
         await db.commit()
@@ -298,6 +301,11 @@ class SubscriptionService:
             update_data["indicator_type"] = update_data["indicator_type"].value
         if "operator" in update_data and update_data["operator"]:
             update_data["operator"] = update_data["operator"].value
+        # Convert CompoundCondition to dict for JSONB storage
+        if "compound_condition" in update_data and update_data["compound_condition"]:
+            update_data["compound_condition"] = CompoundCondition.model_validate(
+                update_data["compound_condition"]
+            ).model_dump(mode="json")
 
         for key, value in update_data.items():
             setattr(subscription, key, value)

@@ -162,6 +162,41 @@ Create a new indicator subscription. Quota is validated against the user's Plan 
 | ==    | Equal to              |
 | !=    | Not equal to          |
 
+**Compound Condition Schema**:
+
+Compound conditions allow combining multiple indicator conditions with AND/OR logic.
+
+| Field      | Type            | Required | Description                        |
+| ---------- | --------------- | -------- | ---------------------------------- |
+| logic      | string          | Yes      | "and" or "or"                      |
+| conditions | array[Condition]| Yes      | List of 1-10 conditions            |
+
+**Condition Schema**:
+
+| Field          | Type    | Required | Description                              |
+| -------------- | ------- | -------- | ---------------------------------------- |
+| indicator_type | string  | Yes      | Indicator: rsi, macd, kd, price          |
+| operator       | string  | Yes      | Operator: >, <, >=, <=, ==, !=           |
+| target_value   | decimal | Yes      | Target threshold (>= 0)                  |
+
+**Example**:
+
+```json
+{
+  "compound_condition": {
+    "logic": "and",
+    "conditions": [
+      {"indicator_type": "rsi", "operator": "<", "target_value": "30"},
+      {"indicator_type": "macd", "operator": ">", "target_value": "0"}
+    ]
+  }
+}
+```
+
+**Logic Behavior**:
+- `and`: All conditions must be true to trigger alert
+- `or`: Any condition being true triggers alert
+
 **Response** (201 Created):
 
 ```json

@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SignalType(StrEnum):
@@ -46,6 +46,34 @@ class FrequencyType(StrEnum):
     MONTHLY = "monthly"
 
 
+class LogicOperator(StrEnum):
+    """邏輯運算子"""
+    AND = "and"
+    OR = "or"
+
+
+class Condition(BaseModel):
+    """Single condition within a compound condition"""
+
+    indicator_type: IndicatorType = Field(..., description="Indicator type: rsi, macd, kd, price")
+    operator: Operator = Field(..., description="Comparison operator: >, <, >=, <=, ==, !=")
+    target_value: Decimal = Field(..., ge=0, description="Target threshold value")
+
+
+class CompoundCondition(BaseModel):
+    """Complex conditions with AND/OR logic"""
+
+    logic: LogicOperator = Field(..., description="Logic operator: and, or")
+    conditions: list[Condition] = Field(..., min_length=1, description="List of conditions")
+
+    @field_validator("conditions")
+    @classmethod
+    def validate_conditions_count(cls, v: list[Condition]) -> list[Condition]:
+        if len(v) > 10:
+            raise ValueError("Maximum 10 conditions allowed")
+        return v
+
+
 class StockBrief(BaseModel):
     """股票簡要信息"""
 
@@ -66,7 +94,7 @@ class IndicatorSubscriptionBase(BaseModel):
     indicator_type: IndicatorType = Field(..., description="Type of indicator (rsi, macd, kd, price)")
     operator: Operator = Field(..., description="Comparison operator")
     target_value: Decimal = Field(..., ge=0, description="Target value for the indicator")
-    compound_condition: Optional[dict] = Field(None, description="Complex conditions (AND/OR logic)")
+    compound_condition: Optional[CompoundCondition] = Field(None, description="Complex conditions (AND/OR logic)")
 
 
 class IndicatorSubscriptionCreate(IndicatorSubscriptionBase):
@@ -84,7 +112,7 @@ class IndicatorSubscriptionUpdate(BaseModel):
     indicator_type: Optional[IndicatorType] = Field(None, description="Type of indicator")
     operator: Optional[Operator] = Field(None, description="Comparison operator")
     target_value: Optional[Decimal] = Field(None, ge=0, description="Target value")
-    compound_condition: Optional[dict] = Field(None, description="Complex conditions")
+    compound_condition: Optional[CompoundCondition] = Field(None, description="Complex conditions")
     is_active: Optional[bool] = Field(None, description="Subscription active status")
 
 
@@ -102,7 +130,7 @@ class IndicatorSubscriptionResponse(BaseModel):
     indicator_type: str
     operator: str
     target_value: Decimal
-    compound_condition: Optional[dict] = None
+    compound_condition: Optional[CompoundCondition] = None
     is_triggered: bool
     cooldown_end_at: Optional[datetime] = None
     is_active: bool
