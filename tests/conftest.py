@@ -10,11 +10,12 @@ from testcontainers.postgres import PostgresContainer
 
 from src.main import app
 from src.database import get_db
-from src.models.base import Base
+from src.models.base import Base, BaseWithoutAutoId
 from src.users.model import User  # noqa: F401 - Ensure model is registered with Base
 from src.stocks.model import Stock  # noqa: F401 - Ensure model is registered with Base
 from src.watchlists.model import Watchlist, WatchlistStock  # noqa: F401 - Ensure model is registered with Base
 from src.subscriptions.model import IndicatorSubscription, NotificationHistory  # noqa: F401 - Ensure model is registered with Base
+from src.plans.model import LevelConfig, Plan  # noqa: F401 - Ensure model is registered with Base
 import bcrypt
 
 
@@ -51,14 +52,16 @@ async def test_engine(test_database_url: str):
     """Create test engine and set up database."""
     engine = create_async_engine(test_database_url, echo=False)
 
-    # Create all tables
+    # Create all tables from both Base classes
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(BaseWithoutAutoId.metadata.create_all)
 
     yield engine
 
     # Drop all tables
     async with engine.begin() as conn:
+        await conn.run_sync(BaseWithoutAutoId.metadata.drop_all)
         await conn.run_sync(Base.metadata.drop_all)
 
     await engine.dispose()
@@ -117,6 +120,18 @@ async def db(db_session: AsyncSession) -> AsyncSession:
 @pytest_asyncio.fixture(scope="function")
 async def test_user_id(db_session: AsyncSession) -> int:
     """Create a test user and return its ID."""
+    # Seed level configs first
+    level_configs = [
+        LevelConfig(level=1, name="Regular", monthly_price=0, yearly_price=0, max_subscriptions=10, max_alerts=10, is_purchasable=False),
+        LevelConfig(level=2, name="Pro", monthly_price=99, yearly_price=999, max_subscriptions=50, max_alerts=50, is_purchasable=True),
+        LevelConfig(level=3, name="Pro Max", monthly_price=199, yearly_price=1999, max_subscriptions=100, max_alerts=100, is_purchasable=True),
+        LevelConfig(level=4, name="Admin", monthly_price=0, yearly_price=0, max_subscriptions=-1, max_alerts=-1, is_purchasable=False),
+    ]
+    for lc in level_configs:
+        db_session.add(lc)
+    await db_session.commit()
+
+    # Create user
     user = User(
         email="test@example.com",
         hashed_password=bcrypt.hashpw(b"password123", bcrypt.gensalt()).decode(),
@@ -125,6 +140,20 @@ async def test_user_id(db_session: AsyncSession) -> int:
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
+
+    # Create Level 1 plan for user
+    from datetime import datetime, timedelta
+    plan = Plan(
+        user_id=user.id,
+        level=1,
+        billing_cycle="yearly",
+        price=0,
+        due_date=datetime.max,
+        is_active=True,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+
     return user.id
 
 
@@ -150,6 +179,9 @@ async def test_subscription_id(
     subscription = IndicatorSubscription(
         user_id=test_user_id,
         stock_id=test_stock_id,
+        title="RSI Buy Signal",
+        message="2330 RSI below 30",
+        signal_type="buy",
         indicator_type="rsi",
         operator="<",
         target_value=Decimal("30.0"),

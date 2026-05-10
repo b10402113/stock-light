@@ -8,6 +8,12 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class SignalType(StrEnum):
+    """信號類型"""
+    BUY = "buy"
+    SELL = "sell"
+
+
 class IndicatorType(StrEnum):
     """指標類型"""
     RSI = "rsi"
@@ -33,10 +39,23 @@ class SendStatus(StrEnum):
     FAILED = "failed"
 
 
+class StockBrief(BaseModel):
+    """股票簡要信息"""
+
+    id: int
+    symbol: str
+    name: str
+    current_price: Optional[Decimal] = None
+    change_percent: Optional[Decimal] = None
+
+
 class IndicatorSubscriptionBase(BaseModel):
     """Base schema for indicator subscription"""
 
     stock_id: int = Field(..., description="Target stock ID")
+    title: str = Field("", max_length=50, description="Alert title (max 50 chars)")
+    message: str = Field("", max_length=200, description="Alert message content (max 200 chars)")
+    signal_type: SignalType = Field(SignalType.BUY, description="Signal type: buy or sell")
     indicator_type: IndicatorType = Field(..., description="Type of indicator (rsi, macd, kd, price)")
     operator: Operator = Field(..., description="Comparison operator")
     target_value: Decimal = Field(..., ge=0, description="Target value for the indicator")
@@ -52,6 +71,9 @@ class IndicatorSubscriptionCreate(IndicatorSubscriptionBase):
 class IndicatorSubscriptionUpdate(BaseModel):
     """Schema for updating a subscription"""
 
+    title: Optional[str] = Field(None, max_length=50, description="Alert title")
+    message: Optional[str] = Field(None, max_length=200, description="Alert message content")
+    signal_type: Optional[SignalType] = Field(None, description="Signal type")
     indicator_type: Optional[IndicatorType] = Field(None, description="Type of indicator")
     operator: Optional[Operator] = Field(None, description="Comparison operator")
     target_value: Optional[Decimal] = Field(None, ge=0, description="Target value")
@@ -65,8 +87,11 @@ class IndicatorSubscriptionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    user_id: int
-    stock_id: int
+    stock: StockBrief
+    subscription_type: str = "indicator"
+    title: str
+    message: str
+    signal_type: str
     indicator_type: str
     operator: str
     target_value: Decimal
@@ -76,6 +101,14 @@ class IndicatorSubscriptionResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class SubscriptionListRequest(BaseModel):
+    """訂閱列表請求"""
+
+    type: Optional[str] = Field(None, description="Filter by type: 'indicator' or 'reminder'")
+    cursor: Optional[int] = Field(None, description="Pagination cursor (last id)")
+    limit: int = Field(20, ge=1, le=100, description="Number of items per page")
 
 
 class SubscriptionListResponse(BaseModel):

@@ -21,6 +21,9 @@ class IndicatorSubscription(Base):
     stock_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("stocks.id"), nullable=False
     )
+    title: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    message: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    signal_type: Mapped[str] = mapped_column(String(10), nullable=False, default="buy")
     indicator_type: Mapped[str] = mapped_column(String(50), nullable=False)
     operator: Mapped[str] = mapped_column(String(10), nullable=False)
     target_value: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)

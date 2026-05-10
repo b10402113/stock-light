@@ -2,21 +2,83 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.clients.redis_client import StockRedisClient
+from src.plans import service as plans_service
+from src.stocks import service as stocks_service
 from src.stocks.model import Stock
 from src.subscriptions.model import IndicatorSubscription, NotificationHistory
 from src.subscriptions.schema import (
     IndicatorSubscriptionCreate,
+    IndicatorSubscriptionResponse,
     IndicatorSubscriptionUpdate,
+    StockBrief,
 )
-from src.users.model import User
 
 
 class SubscriptionService:
     """指標訂閱業務邏輯"""
+
+    @staticmethod
+    async def enrich_subscription_with_stock(
+        db: AsyncSession,
+        subscription: IndicatorSubscription,
+        redis_client: StockRedisClient | None = None,
+    ) -> IndicatorSubscriptionResponse:
+        """Enrich subscription with stock details.
+
+        Args:
+            db: 資料庫會話
+            subscription: 訂閱實體
+            redis_client: Redis client for price lookup
+
+        Returns:
+            IndicatorSubscriptionResponse: Response with stock details
+        """
+        stock = await stocks_service.StockService.get_by_id(db, subscription.stock_id)
+        if not stock:
+            raise ValueError(f"Stock not found: {subscription.stock_id}")
+
+        # Get current price from Redis or database
+        current_price: Optional[Decimal] = None
+        if redis_client:
+            cached_price = await redis_client.get_stock_price(subscription.stock_id)
+            if cached_price is not None:
+                current_price = Decimal(str(cached_price))
+
+        if current_price is None:
+            current_price = stock.current_price
+
+        # Build stock brief
+        stock_brief = StockBrief(
+            id=stock.id,
+            symbol=stock.symbol,
+            name=stock.name,
+            current_price=current_price,
+            change_percent=None,  # Would need prev_close to calculate
+        )
+
+        return IndicatorSubscriptionResponse(
+            id=subscription.id,
+            stock=stock_brief,
+            subscription_type="indicator",
+            title=subscription.title,
+            message=subscription.message,
+            signal_type=subscription.signal_type,
+            indicator_type=subscription.indicator_type,
+            operator=subscription.operator,
+            target_value=subscription.target_value,
+            compound_condition=subscription.compound_condition,
+            is_triggered=subscription.is_triggered,
+            cooldown_end_at=subscription.cooldown_end_at,
+            is_active=subscription.is_active,
+            created_at=subscription.created_at,
+            updated_at=subscription.updated_at,
+        )
 
     @staticmethod
     async def get_by_id(
@@ -80,7 +142,7 @@ class SubscriptionService:
 
     @staticmethod
     async def check_quota(db: AsyncSession, user_id: int) -> tuple[bool, int, int]:
-        """檢查用戶訂閱配額.
+        """檢查用戶訂閱配額 (Plan-level quota).
 
         Args:
             db: 資料庫會話
@@ -89,12 +151,8 @@ class SubscriptionService:
         Returns:
             tuple[bool, int, int]: (是否超額, 已使用數量, 配額上限)
         """
-        # Get user quota
-        user = await db.get(User, user_id)
-        if not user:
-            raise ValueError(f"User not found: {user_id}")
-
-        quota = user.quota
+        # Get user quota from Plan level
+        max_subscriptions, _ = await plans_service.PlanService.get_user_quota(db, user_id)
 
         # Count active subscriptions
         count = await db.scalar(
@@ -108,7 +166,11 @@ class SubscriptionService:
         )
         used = count or 0
 
-        return used < quota, used, quota
+        # Level 4 (Admin) has unlimited quota (-1)
+        if max_subscriptions == -1:
+            return True, used, -1
+
+        return used < max_subscriptions, used, max_subscriptions
 
     @staticmethod
     async def check_duplicate(
@@ -194,6 +256,9 @@ class SubscriptionService:
         subscription = IndicatorSubscription(
             user_id=user_id,
             stock_id=data.stock_id,
+            title=data.title,
+            message=data.message,
+            signal_type=data.signal_type.value,
             indicator_type=data.indicator_type.value,
             operator=data.operator.value,
             target_value=data.target_value,
@@ -223,6 +288,8 @@ class SubscriptionService:
         update_data = data.model_dump(exclude_unset=True)
 
         # Convert enum values to strings if present
+        if "signal_type" in update_data and update_data["signal_type"]:
+            update_data["signal_type"] = update_data["signal_type"].value
         if "indicator_type" in update_data and update_data["indicator_type"]:
             update_data["indicator_type"] = update_data["indicator_type"].value
         if "operator" in update_data and update_data["operator"]:

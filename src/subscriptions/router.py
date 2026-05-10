@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import CurrentUser
+from src.clients.redis_client import StockRedisClient
 from src.database import get_db
 from src.response import Response
 from src.subscriptions import service
@@ -41,29 +42,20 @@ async def list_subscriptions(
         limit: Items per page
 
     Returns:
-        Response[SubscriptionListResponse]: List of subscriptions
+        Response[SubscriptionListResponse]: List of subscriptions with stock details
     """
     subscriptions, next_cursor = await service.SubscriptionService.get_user_subscriptions(
         db, current_user.id, cursor, limit
     )
 
+    redis_client = StockRedisClient()
     response_data = [
-        IndicatorSubscriptionResponse(
-            id=sub.id,
-            user_id=sub.user_id,
-            stock_id=sub.stock_id,
-            indicator_type=sub.indicator_type,
-            operator=sub.operator,
-            target_value=sub.target_value,
-            compound_condition=sub.compound_condition,
-            is_triggered=sub.is_triggered,
-            cooldown_end_at=sub.cooldown_end_at,
-            is_active=sub.is_active,
-            created_at=sub.created_at,
-            updated_at=sub.updated_at,
+        await service.SubscriptionService.enrich_subscription_with_stock(
+            db, sub, redis_client
         )
         for sub in subscriptions
     ]
+    await redis_client.close()
 
     return Response(
         data=SubscriptionListResponse(
@@ -89,15 +81,15 @@ async def create_subscription(
     """Create a new subscription.
 
     Args:
-        data: Subscription creation data
+        data: Subscription creation data (includes title, message, signal_type)
         current_user: Current authenticated user
         db: Database session
 
     Returns:
-        Response[IndicatorSubscriptionResponse]: Created subscription
+        Response[IndicatorSubscriptionResponse]: Created subscription with stock details
 
     Raises:
-        HTTPException: 400 if quota exceeded, stock not found, or duplicate
+        HTTPException: 403 if quota exceeded, 400 if stock not found or duplicate, 409 if conflict
     """
     try:
         subscription = await service.SubscriptionService.create(db, current_user.id, data)
@@ -117,22 +109,13 @@ async def create_subscription(
             detail=str(e),
         )
 
-    return Response(
-        data=IndicatorSubscriptionResponse(
-            id=subscription.id,
-            user_id=subscription.user_id,
-            stock_id=subscription.stock_id,
-            indicator_type=subscription.indicator_type,
-            operator=subscription.operator,
-            target_value=subscription.target_value,
-            compound_condition=subscription.compound_condition,
-            is_triggered=subscription.is_triggered,
-            cooldown_end_at=subscription.cooldown_end_at,
-            is_active=subscription.is_active,
-            created_at=subscription.created_at,
-            updated_at=subscription.updated_at,
-        )
+    redis_client = StockRedisClient()
+    response = await service.SubscriptionService.enrich_subscription_with_stock(
+        db, subscription, redis_client
     )
+    await redis_client.close()
+
+    return Response(data=response)
 
 
 @router.get(
@@ -154,7 +137,7 @@ async def get_subscription(
         db: Database session
 
     Returns:
-        Response[IndicatorSubscriptionResponse]: Subscription details
+        Response[IndicatorSubscriptionResponse]: Subscription details with stock info
 
     Raises:
         HTTPException: 404 if subscription not found or not owned by user
@@ -166,29 +149,20 @@ async def get_subscription(
             detail=f"Subscription not found: {subscription_id}",
         )
 
-    return Response(
-        data=IndicatorSubscriptionResponse(
-            id=subscription.id,
-            user_id=subscription.user_id,
-            stock_id=subscription.stock_id,
-            indicator_type=subscription.indicator_type,
-            operator=subscription.operator,
-            target_value=subscription.target_value,
-            compound_condition=subscription.compound_condition,
-            is_triggered=subscription.is_triggered,
-            cooldown_end_at=subscription.cooldown_end_at,
-            is_active=subscription.is_active,
-            created_at=subscription.created_at,
-            updated_at=subscription.updated_at,
-        )
+    redis_client = StockRedisClient()
+    response = await service.SubscriptionService.enrich_subscription_with_stock(
+        db, subscription, redis_client
     )
+    await redis_client.close()
+
+    return Response(data=response)
 
 
 @router.patch(
     "/{subscription_id}",
     response_model=Response[IndicatorSubscriptionResponse],
     summary="更新訂閱",
-    description="更新訂閱的指標類型、運算子或目標值",
+    description="更新訂閱的標題、訊息、信號類型、指標類型、運算子或目標值",
 )
 async def update_subscription(
     subscription_id: int,
@@ -205,7 +179,7 @@ async def update_subscription(
         db: Database session
 
     Returns:
-        Response[IndicatorSubscriptionResponse]: Updated subscription
+        Response[IndicatorSubscriptionResponse]: Updated subscription with stock details
 
     Raises:
         HTTPException: 404 if subscription not found or not owned by user
@@ -219,22 +193,13 @@ async def update_subscription(
 
     updated = await service.SubscriptionService.update(db, subscription, data)
 
-    return Response(
-        data=IndicatorSubscriptionResponse(
-            id=updated.id,
-            user_id=updated.user_id,
-            stock_id=updated.stock_id,
-            indicator_type=updated.indicator_type,
-            operator=updated.operator,
-            target_value=updated.target_value,
-            compound_condition=updated.compound_condition,
-            is_triggered=updated.is_triggered,
-            cooldown_end_at=updated.cooldown_end_at,
-            is_active=updated.is_active,
-            created_at=updated.created_at,
-            updated_at=updated.updated_at,
-        )
+    redis_client = StockRedisClient()
+    response = await service.SubscriptionService.enrich_subscription_with_stock(
+        db, updated, redis_client
     )
+    await redis_client.close()
+
+    return Response(data=response)
 
 
 @router.delete(
@@ -256,7 +221,7 @@ async def delete_subscription(
         db: Database session
 
     Returns:
-        Response[IndicatorSubscriptionResponse]: Deleted subscription
+        Response[IndicatorSubscriptionResponse]: Deleted subscription with stock details
 
     Raises:
         HTTPException: 404 if subscription not found or not owned by user
@@ -270,19 +235,10 @@ async def delete_subscription(
 
     deleted = await service.SubscriptionService.soft_delete(db, subscription)
 
-    return Response(
-        data=IndicatorSubscriptionResponse(
-            id=deleted.id,
-            user_id=deleted.user_id,
-            stock_id=deleted.stock_id,
-            indicator_type=deleted.indicator_type,
-            operator=deleted.operator,
-            target_value=deleted.target_value,
-            compound_condition=deleted.compound_condition,
-            is_triggered=deleted.is_triggered,
-            cooldown_end_at=deleted.cooldown_end_at,
-            is_active=deleted.is_active,
-            created_at=deleted.created_at,
-            updated_at=deleted.updated_at,
-        )
+    redis_client = StockRedisClient()
+    response = await service.SubscriptionService.enrich_subscription_with_stock(
+        db, deleted, redis_client
     )
+    await redis_client.close()
+
+    return Response(data=response)

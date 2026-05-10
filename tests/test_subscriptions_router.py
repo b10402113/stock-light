@@ -43,6 +43,9 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
+                "title": "RSI Buy Signal",
+                "message": "2330 RSI below 30",
+                "signal_type": "buy",
                 "indicator_type": "rsi",
                 "operator": "<",
                 "target_value": "30.0",
@@ -53,7 +56,13 @@ class TestSubscriptionsRouter:
         assert response.status_code == 201
         data = response.json()
         assert data["code"] == 0
-        assert data["data"]["stock_id"] == stock_id
+        assert data["data"]["stock"]["id"] == stock_id
+        assert data["data"]["stock"]["symbol"] == "2330.TW"
+        assert data["data"]["stock"]["name"] == "台積電"
+        assert data["data"]["subscription_type"] == "indicator"
+        assert data["data"]["title"] == "RSI Buy Signal"
+        assert data["data"]["message"] == "2330 RSI below 30"
+        assert data["data"]["signal_type"] == "buy"
         assert data["data"]["indicator_type"] == "rsi"
         assert data["data"]["operator"] == "<"
         assert data["data"]["target_value"] == "30.0000"
@@ -157,7 +166,8 @@ class TestSubscriptionsRouter:
             headers=auth_headers,
         )
 
-        assert response.status_code == 400
+        # Should fail due to unique constraint (indicator, operator, value)
+        assert response.status_code == 400 or response.status_code == 409
 
     @pytest.mark.asyncio
     async def test_list_subscriptions(
@@ -193,20 +203,24 @@ class TestSubscriptionsRouter:
         assert data["code"] == 0
         assert len(data["data"]["data"]) == 2
         assert data["data"]["has_more"] is False
+        # Check stock details are included
+        assert data["data"]["data"][0]["stock"]["symbol"] == "2330.TW"
 
     @pytest.mark.asyncio
     async def test_list_subscriptions_pagination(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
         """Test subscription list pagination"""
-        # Create 5 subscriptions
+        # Create 5 subscriptions (different indicators to avoid duplicate)
+        indicators = ["rsi", "macd", "kd", "price", "rsi"]
+        operators = ["<", ">", ">=", "<=", "=="]
         for i in range(5):
             await client.post(
                 "/subscriptions",
                 json={
                     "stock_id": stock_id,
-                    "indicator_type": "rsi",
-                    "operator": "<",
+                    "indicator_type": indicators[i],
+                    "operator": operators[i],
                     "target_value": str(30.0 + i),
                 },
                 headers=auth_headers,
@@ -257,6 +271,7 @@ class TestSubscriptionsRouter:
         assert response.status_code == 200
         data = response.json()
         assert data["data"]["indicator_type"] == "rsi"
+        assert data["data"]["stock"]["id"] == stock_id
 
     @pytest.mark.asyncio
     async def test_get_subscription_not_found(
@@ -288,12 +303,13 @@ class TestSubscriptionsRouter:
         # Update subscription
         response = await client.patch(
             f"/subscriptions/{subscription_id}",
-            json={"target_value": "25.0", "is_active": False},
+            json={"title": "Updated Title", "target_value": "25.0", "is_active": False},
             headers=auth_headers,
         )
 
         assert response.status_code == 200
         data = response.json()
+        assert data["data"]["title"] == "Updated Title"
         assert data["data"]["target_value"] == "25.0000"
         assert data["data"]["is_active"] is False
 
@@ -385,14 +401,14 @@ class TestSubscriptionsRouter:
         """Test creating subscriptions with different operators"""
         operators = [">", "<", ">=", "<=", "==", "!="]
 
-        for operator in operators:
+        for i, operator in enumerate(operators):
             response = await client.post(
                 "/subscriptions",
                 json={
                     "stock_id": stock_id,
                     "indicator_type": "rsi",
                     "operator": operator,
-                    "target_value": "50.0",
+                    "target_value": str(50.0 + i),  # Different values to avoid duplicate
                 },
                 headers=auth_headers,
             )

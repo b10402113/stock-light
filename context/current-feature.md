@@ -1,18 +1,55 @@
-# Current Feature
+# Indicator Subscription Enhancement
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-<!-- Goals will be populated when loading a feature -->
+- Add title, message, signal_type fields to IndicatorSubscription model
+- Enrich API responses with stock details (symbol, name, price, change_percent)
+- Integrate quota validation with Plan-level limits
+- Implement unified list endpoint for all subscription types
+- Apply keyset pagination for list queries (no OFFSET)
+- Create database migration for new fields (NOT NULL with DEFAULT)
+- Update schemas, service, and router for new functionality
 
 ## Notes
 
-<!-- Notes will be populated when loading a feature -->
+### Database Constraints
+- Primary key: BIGSERIAL (auto-increment)
+- No NULL allowed - use empty string or 0 for business empty values
+- Soft delete required: is_deleted + updated_at trigger
+- New fields: title (VARCHAR 50), message (VARCHAR 200), signal_type ('buy'|'sell')
+
+### Quota Limits by Level
+- Level 1 (Regular): 10 subscriptions, 1 condition per alert
+- Level 2 (Pro): 50 subscriptions, 3 conditions per alert
+- Level 3 (Pro Max): 100 subscriptions, unlimited conditions
+- Level 4 (Admin): Unlimited
+
+### Cross-module Dependencies
+- stocks_service: get stock details and current price
+- plans_service: check user quota limits
+- Strict layering: router → service → model/client
+
+### Response Format
+- Follow existing Response[T] pattern
+- Stock nested in response with brief info
+- Unified list endpoint distinguishes by subscription_type field
 
 ## History
+
+- 2026-05-10: Indicator Subscription Enhancement
+  - Added title, message, signal_type fields to IndicatorSubscription model
+  - Database migration with NOT NULL DEFAULT constraints (VARCHAR 50, 200, 10)
+  - Updated schemas with StockBrief for enriched responses
+  - Added SignalType enum (buy, sell)
+  - Integrated Plan-level quota validation (max_subscriptions per level)
+  - Enriched API responses with stock details (symbol, name, price from Redis)
+  - Updated router to use enrich_subscription_with_stock for all responses
+  - Updated test fixtures with LevelConfig and Plan seeding
+  - Updated API documentation with new fields and quota limits table
 
 - 2026-05-10: Add User Level System
   - Created src/plans/ domain module (model, schema, service, router)

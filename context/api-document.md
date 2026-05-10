@@ -54,6 +54,15 @@ All API responses follow a unified format:
 
 ## Changelog
 
+### v1.9.0 (2026-05-10)
+
+- Enhanced Indicator Subscription API
+- Added title, message, signal_type fields to subscriptions
+- Enriched responses with stock details (symbol, name, price)
+- Integrated Plan-level quota validation (max_subscriptions per level)
+- Stock details retrieved from Redis cache for current price
+- Subscription type badge in unified response format
+
 ### v1.8.0 (2026-05-10)
 
 - Added Plans API

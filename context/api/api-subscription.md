@@ -2,7 +2,7 @@
 
 ### List Subscriptions
 
-Get all indicator subscriptions for the authenticated user with keyset pagination.
+Get all indicator subscriptions for the authenticated user with keyset pagination. Responses include enriched stock details (symbol, name, price).
 
 **Endpoint**: `GET /subscriptions`
 
@@ -31,8 +31,17 @@ Get all indicator subscriptions for the authenticated user with keyset paginatio
     "data": [
       {
         "id": 1,
-        "user_id": 1,
-        "stock_id": 1,
+        "stock": {
+          "id": 123,
+          "symbol": "2330.TW",
+          "name": "台積電",
+          "current_price": 580.5,
+          "change_percent": null
+        },
+        "subscription_type": "indicator",
+        "title": "RSI Buy Signal",
+        "message": "2330 RSI below 30, consider buying",
+        "signal_type": "buy",
         "indicator_type": "rsi",
         "operator": "<",
         "target_value": "30.0000",
@@ -60,26 +69,39 @@ Get all indicator subscriptions for the authenticated user with keyset paginatio
 
 **Subscription Schema**:
 
-| Field              | Type             | Description                          |
-| ------------------ | ---------------- | ------------------------------------ |
-| id                 | integer          | Subscription ID                      |
-| user_id            | integer          | Owner user ID                        |
-| stock_id           | integer          | Target stock ID                      |
-| indicator_type     | string           | Indicator type: rsi, macd, kd, price |
-| operator           | string           | Comparison: >, <, >=, <=, ==, !=     |
-| target_value       | decimal          | Target threshold value               |
-| compound_condition | object \| null   | Complex AND/OR conditions            |
-| is_triggered       | boolean          | Whether condition was triggered      |
-| cooldown_end_at    | datetime \| null | Cooldown period end time             |
-| is_active          | boolean          | Subscription active status           |
-| created_at         | datetime         | Creation timestamp                   |
-| updated_at         | datetime         | Last update timestamp                |
+| Field              | Type             | Description                              |
+| ------------------ | ---------------- | ---------------------------------------- |
+| id                 | integer          | Subscription ID                          |
+| stock              | object           | Stock details (id, symbol, name, price)  |
+| subscription_type  | string           | Always "indicator"                       |
+| title              | string           | Alert title (max 50 chars)               |
+| message            | string           | Alert message content (max 200 chars)    |
+| signal_type        | string           | Signal type: "buy" or "sell"             |
+| indicator_type     | string           | Indicator type: rsi, macd, kd, price     |
+| operator           | string           | Comparison: >, <, >=, <=, ==, !=         |
+| target_value       | decimal          | Target threshold value                   |
+| compound_condition | object \| null   | Complex AND/OR conditions                |
+| is_triggered       | boolean          | Whether condition was triggered          |
+| cooldown_end_at    | datetime \| null | Cooldown period end time                 |
+| is_active          | boolean          | Subscription active status               |
+| created_at         | datetime         | Creation timestamp                       |
+| updated_at         | datetime         | Last update timestamp                    |
+
+**Stock Schema**:
+
+| Field          | Type            | Description                         |
+| -------------- | --------------- | ----------------------------------- |
+| id             | integer         | Stock ID                            |
+| symbol         | string          | Stock symbol (e.g., "2330.TW")      |
+| name           | string          | Stock name (e.g., "台積電")         |
+| current_price  | decimal \| null | Current price from Redis cache      |
+| change_percent | decimal \| null | Price change percentage (if available) |
 
 ---
 
 ### Create Subscription
 
-Create a new indicator subscription.
+Create a new indicator subscription. Quota is validated against the user's Plan level.
 
 **Endpoint**: `POST /subscriptions`
 
@@ -90,6 +112,9 @@ Create a new indicator subscription.
 ```json
 {
   "stock_id": 1,
+  "title": "RSI Buy Signal",
+  "message": "2330 RSI below 30, consider buying",
+  "signal_type": "buy",
   "indicator_type": "rsi",
   "operator": "<",
   "target_value": "30.0",
@@ -99,13 +124,23 @@ Create a new indicator subscription.
 
 **Request Schema**:
 
-| Field              | Type           | Required | Constraints                 | Description                 |
-| ------------------ | -------------- | -------- | --------------------------- | --------------------------- |
-| stock_id           | integer        | Yes      | Must reference active stock | Target stock ID             |
-| indicator_type     | string         | Yes      | Enum: rsi, macd, kd, price  | Type of indicator           |
-| operator           | string         | Yes      | Enum: >, <, >=, <=, ==, !=  | Comparison operator         |
-| target_value       | decimal        | Yes      | >= 0                        | Target threshold value      |
-| compound_condition | object \| null | No       | -                           | Complex conditions (AND/OR) |
+| Field              | Type           | Required | Default | Constraints                 | Description                 |
+| ------------------ | -------------- | -------- | ------- | --------------------------- | --------------------------- |
+| stock_id           | integer        | Yes      | -       | Must reference active stock | Target stock ID             |
+| title              | string         | No       | ""      | max_length: 50              | Alert title                 |
+| message            | string         | No       | ""      | max_length: 200             | Alert message content       |
+| signal_type        | string         | No       | "buy"   | Enum: buy, sell             | Signal type                 |
+| indicator_type     | string         | Yes      | -       | Enum: rsi, macd, kd, price  | Type of indicator           |
+| operator           | string         | Yes      | -       | Enum: >, <, >=, <=, ==, !=  | Comparison operator         |
+| target_value       | decimal        | Yes      | -       | >= 0                        | Target threshold value      |
+| compound_condition | object \| null | No       | null    | -                           | Complex conditions (AND/OR) |
+
+**Signal Types**:
+
+| Value | Description             |
+| ----- | ----------------------- |
+| buy   | Buy signal indicator    |
+| sell  | Sell signal indicator   |
 
 **Indicator Types**:
 
@@ -135,8 +170,17 @@ Create a new indicator subscription.
   "message": "success",
   "data": {
     "id": 1,
-    "user_id": 1,
-    "stock_id": 1,
+    "stock": {
+      "id": 123,
+      "symbol": "2330.TW",
+      "name": "台積電",
+      "current_price": 580.5,
+      "change_percent": null
+    },
+    "subscription_type": "indicator",
+    "title": "RSI Buy Signal",
+    "message": "2330 RSI below 30, consider buying",
+    "signal_type": "buy",
     "indicator_type": "rsi",
     "operator": "<",
     "target_value": "30.0000",
@@ -157,12 +201,13 @@ Create a new indicator subscription.
 | 400    | Stock not found or inactive: {id}     |
 | 400    | Duplicate subscription already exists |
 | 403    | Subscription quota exceeded: used X/Y |
+| 409    | Subscription already exists           |
 
 ---
 
 ### Get Subscription
 
-Get a single subscription by ID.
+Get a single subscription by ID with enriched stock details.
 
 **Endpoint**: `GET /subscriptions/{subscription_id}`
 
@@ -182,8 +227,17 @@ Get a single subscription by ID.
   "message": "success",
   "data": {
     "id": 1,
-    "user_id": 1,
-    "stock_id": 1,
+    "stock": {
+      "id": 123,
+      "symbol": "2330.TW",
+      "name": "台積電",
+      "current_price": 580.5,
+      "change_percent": null
+    },
+    "subscription_type": "indicator",
+    "title": "RSI Buy Signal",
+    "message": "2330 RSI below 30, consider buying",
+    "signal_type": "buy",
     "indicator_type": "rsi",
     "operator": "<",
     "target_value": "30.0000",
@@ -207,7 +261,7 @@ Get a single subscription by ID.
 
 ### Update Subscription
 
-Update subscription indicator type, operator, target value, or active status.
+Update subscription title, message, signal_type, indicator type, operator, target value, or active status.
 
 **Endpoint**: `PATCH /subscriptions/{subscription_id}`
 
@@ -223,6 +277,9 @@ Update subscription indicator type, operator, target value, or active status.
 
 ```json
 {
+  "title": "Updated Title",
+  "message": "Updated message",
+  "signal_type": "sell",
   "indicator_type": "price",
   "operator": ">",
   "target_value": "700.0",
@@ -234,6 +291,9 @@ Update subscription indicator type, operator, target value, or active status.
 
 | Field              | Type            | Required | Constraints                | Description         |
 | ------------------ | --------------- | -------- | -------------------------- | ------------------- |
+| title              | string \| null  | No       | max_length: 50             | Alert title         |
+| message            | string \| null  | No       | max_length: 200            | Alert message       |
+| signal_type        | string \| null  | No       | Enum: buy, sell            | Signal type         |
 | indicator_type     | string \| null  | No       | Enum: rsi, macd, kd, price | Type of indicator   |
 | operator           | string \| null  | No       | Enum: >, <, >=, <=, ==, != | Comparison operator |
 | target_value       | decimal \| null | No       | >= 0                       | Target value        |
@@ -248,8 +308,17 @@ Update subscription indicator type, operator, target value, or active status.
   "message": "success",
   "data": {
     "id": 1,
-    "user_id": 1,
-    "stock_id": 1,
+    "stock": {
+      "id": 123,
+      "symbol": "2330.TW",
+      "name": "台積電",
+      "current_price": 580.5,
+      "change_percent": null
+    },
+    "subscription_type": "indicator",
+    "title": "Updated Title",
+    "message": "Updated message",
+    "signal_type": "sell",
     "indicator_type": "price",
     "operator": ">",
     "target_value": "700.0000",
@@ -293,8 +362,17 @@ Soft delete a subscription.
   "message": "success",
   "data": {
     "id": 1,
-    "user_id": 1,
-    "stock_id": 1,
+    "stock": {
+      "id": 123,
+      "symbol": "2330.TW",
+      "name": "台積電",
+      "current_price": 580.5,
+      "change_percent": null
+    },
+    "subscription_type": "indicator",
+    "title": "RSI Buy Signal",
+    "message": "2330 RSI below 30",
+    "signal_type": "buy",
     "indicator_type": "rsi",
     "operator": "<",
     "target_value": "30.0000",
@@ -315,5 +393,18 @@ Soft delete a subscription.
 | 404    | Subscription not found: {id} |
 
 **Note**: After deletion, the subscription will no longer appear in list results or be accessible by ID.
+
+---
+
+### Quota Limits by Plan Level
+
+Subscription quota is validated against the user's active Plan level:
+
+| Level | Name    | Max Subscriptions | Max Conditions per Alert |
+| ----- | ------- | ----------------- | ------------------------ |
+| 1     | Regular | 10                | 1                        |
+| 2     | Pro     | 50                | 3                        |
+| 3     | Pro Max | 100               | Unlimited                |
+| 4     | Admin   | Unlimited (-1)     | Unlimited                |
 
 ---
