@@ -45,6 +45,7 @@ All API responses follow a unified format:
 
 - Health: @context/api/api-health.md
 - User: @context/api/api-user.md
+- Plan: @context/api/api-plan.md
 - Stock: @context/api/api-stock.md
 - Oauth: @context/api/api-oauth.md
 - Subscription: @context/api/api-subscription.md
@@ -52,6 +53,17 @@ All API responses follow a unified format:
 - Watchlist: @context/api/api-watchlist.md
 
 ## Changelog
+
+### v1.8.0 (2026-05-10)
+
+- Added Plans API
+- User Level System with 4 tiers (Regular, Pro, Pro Max, Admin)
+- Level configuration with pricing and quotas
+- Plan management for user subscriptions
+- Admin-only endpoints for plan creation/update/cancellation
+- Billing cycle support (monthly/yearly)
+- Auto-downgrade on expiration
+- Permanent access for Admin level
 
 ### v1.7.0 (2026-05-09)
 

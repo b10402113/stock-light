@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from src.config import settings
 from src.models import Base
 from src.users.model import User  # Import models to register with Base.metadata
+from src.plans.model import LevelConfig, Plan  # Import plan models
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
