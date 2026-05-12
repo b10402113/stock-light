@@ -1,4 +1,4 @@
-# Current Feature: Compound Condition Model Fix
+# Current Feature: DailyPrice Historical Data Table
 
 ## Status
 
@@ -6,35 +6,75 @@ Complete
 
 ## Goals
 
-- ✅ Change `indicator_type`, `operator`, `target_value` to `nullable=True` in model.py
-- ✅ Remove redundant indexes: `is_active_idx`, `user_id_idx`, `stock_id_idx`
-- ✅ Add `idx_indicator_subs_on_stock_active` partial index for price trigger queries
-- ✅ Add `idx_indicator_subs_on_user` partial index for user list queries
-- ✅ Update unique constraint to only apply to single conditions (where compound_condition IS NULL)
-- ✅ Create database migration for nullable changes and index restructuring
-- ✅ Update schema.py if needed for nullable field validation
-- ✅ Update service.py to handle nullable single condition fields
-- ✅ Update tests for nullable field scenarios
+- Create DailyPrice model with OHLCV fields (open, high, low, close, volume)
+- Add composite unique index on (stock_id, date) to prevent duplicates
+- Define Pydantic schemas for create/response with pagination support
+- Add service methods: bulk_insert, get_by_range, calculate_ma, get_latest
+- Create API endpoints: GET/POST /stocks/{stock_id}/prices, GET /stocks/{stock_id}/ma/{period}
+- Create Alembic migration with proper indexes
+- Add comprehensive tests for model, service, API, and edge cases
 
 ## Notes
 
-- **is_deleted field**: Already defined in Base model (src/models/base.py:26-30), inherited by IndicatorSubscription. No changes needed.
-- **Why nullable**: When storing compound_condition, single condition fields (indicator_type/operator/target_value) should be NULL to avoid fake values.
-- **Index optimization rationale**:
-  - Boolean indexes ineffective (low cardinality)
-  - B-Tree leftmost prefix: (user_id, stock_id) covers user_id queries
-  - Price trigger query needs: stock_id + is_active + is_deleted → partial index
-- **Unique constraint scope**: Only enforce uniqueness for single conditions (compound_condition IS NULL)
-- **Migration safety**: Existing single condition data keeps values, no data loss
+### Database Design
 
-## References
+- Primary key: BIGSERIAL (project convention, avoid UUID for performance)
+- Foreign key: stock_id → stocks.id (Integer)
+- Date field: Date type, nullable=False
+- OHLCV: Numeric(10, 2), Volume: BigInteger
+- Composite unique index idx_daily_price_stock_date on (stock_id, date)
+- No NULL values, no soft delete (historical data is immutable)
 
-- src/subscriptions/model.py:27-29 - Current nullable=False fields
-- src/subscriptions/model.py:44-59 - Current index definitions
-- src/subscriptions/schema.py - May need Optional fields
-- docs/rules/database.md - Index strategy guidelines
+### Data Source
+
+- **Phase 1**: Manual/admin upload via API only (no yfinance integration yet)
+- POST /stocks/{stock_id}/prices endpoint for bulk insert (admin only)
+- yfinance integration deferred to future iteration
+
+### Performance
+
+- Expected volume: 100 stocks × 365 days × 5 years ≈ 182,500 rows
+- Composite index covers stock_id + date range queries
+- Redis caching for frequently calculated indicators (200MA)
+
+### Data Quality
+
+- Validate OHLCV consistency: high >= low, high >= open/close, low <= open/close
+- Handle missing data: weekends, holidays, suspended trading
+- No adjusted prices initially (future consideration for stock splits/dividends)
+
+### Backtesting Support
+
+- Ensure data completeness for accurate backtesting
+- Efficient date range queries via composite index
 
 ## History
+
+- 2026-05-12: DailyPrice Historical Data Table
+  - Created DailyPrice model in src/stocks/model.py with BIGSERIAL PK, OHLCV fields, BigInteger volume
+  - Added composite unique constraint uq_daily_price_stock_date on (stock_id, date)
+  - Added composite index idx_daily_price_stock_date for efficient range queries
+  - Added Stock.daily_prices relationship with lazy="selectin" and order_by date desc
+  - Defined Pydantic schemas: DailyPriceBase, DailyPriceCreate, DailyPriceBulkCreate, DailyPriceResponse, DailyPriceListResponse, MovingAverageResponse
+  - Added OHLCV consistency validators (high >= open/close, low <= open/close, high >= low)
+  - Added DailyPriceService with bulk_insert_prices (upsert mode), get_prices_by_range (keyset pagination), calculate_ma, get_latest_prices
+  - Created API endpoints: GET/POST /stocks/{stock_id}/prices, GET /stocks/{stock_id}/ma/{period}
+  - Created Alembic migration 2026-05-12_create_daily_prices_table.py
+  - Added 29 comprehensive tests covering router, service, and schema validations
+  - Updated API documentation in context/api/api-stock.md
+  - Fixed datetime import convention (use datetime.date/datetime.datetime with prefix)
+  - All stock-related tests pass (48/48)
+
+- 2026-05-10: Compound Condition Model Fix
+  - Changed indicator_type, operator, target_value to nullable=True in model.py
+  - Removed redundant indexes (is_active_idx, user_id_idx, stock_id_idx)
+  - Added optimized partial indexes for actual query patterns
+  - Updated unique constraint to only apply to single conditions (compound_condition IS NULL)
+  - Added model_validator to ensure at least one condition is provided
+  - Updated service.py to handle nullable single condition fields
+  - Created database migration for nullable changes and index restructuring
+  - All compound condition tests (15/15) pass
+  - Migration preserves existing data with no loss
 
 - 2026-05-10: Compound Condition Schema
   - Added LogicOperator enum (AND="and", OR="or") to schema.py

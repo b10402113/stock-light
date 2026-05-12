@@ -1,5 +1,6 @@
 """Stock API endpoints."""
 
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -9,7 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_db
 from src.response import Response
 from src.stocks import service
-from src.stocks.schema import StockCreate, StockListResponse, StockResponse, StockUpdate
+from src.stocks.schema import (
+    DailyPriceBulkCreate,
+    DailyPriceListResponse,
+    DailyPriceResponse,
+    MovingAverageResponse,
+    StockCreate,
+    StockListResponse,
+    StockResponse,
+    StockUpdate,
+)
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
@@ -217,3 +227,169 @@ async def delete_stock(
 
     deleted_stock = await service.StockService.soft_delete(db, stock)
     return Response(data=StockResponse.model_validate(deleted_stock))
+
+
+# DailyPrice endpoints (using stock_id as path parameter)
+
+
+@router.get(
+    "/{stock_id}/prices",
+    response_model=Response[DailyPriceListResponse],
+    summary="取得股票歷史價格",
+    description="取得股票的日K線歷史價格資料（支援 Keyset 分頁）",
+)
+async def list_daily_prices(
+    stock_id: int,
+    db: AsyncSession = Depends(get_db),
+    start_date: Optional[date] = Query(None, description="開始日期（包含）"),
+    end_date: Optional[date] = Query(None, description="結束日期（包含）"),
+    cursor: Optional[date] = Query(None, description="分頁游標（上一頁最後一筆的日期）"),
+    limit: int = Query(100, ge=1, le=100, description="每頁數量"),
+) -> Response[DailyPriceListResponse]:
+    """List daily prices for a stock.
+
+    Args:
+        stock_id: Stock ID
+        db: Database session
+        start_date: Start date (inclusive)
+        end_date: End date (inclusive)
+        cursor: Pagination cursor (date)
+        limit: Items per page
+
+    Returns:
+        Response[DailyPriceListResponse]: List of daily prices with pagination info
+
+    Raises:
+        HTTPException: 404 if stock not found
+    """
+    stock = await service.StockService.get_by_id(db, stock_id)
+    if not stock:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stock not found: {stock_id}",
+        )
+
+    prices, next_cursor = await service.DailyPriceService.get_prices_by_range(
+        db,
+        stock_id=stock_id,
+        start_date=start_date,
+        end_date=end_date,
+        cursor=cursor,
+        limit=limit,
+    )
+
+    return Response(
+        data=DailyPriceListResponse(
+            data=[DailyPriceResponse.model_validate(p) for p in prices],
+            next_cursor=next_cursor,
+            has_more=next_cursor is not None,
+        )
+    )
+
+
+@router.post(
+    "/{stock_id}/prices",
+    response_model=Response[dict],
+    status_code=status.HTTP_201_CREATED,
+    summary="批量插入股票歷史價格",
+    description="批量插入股票的日K線歷史價格資料（管理員專用，使用 upsert 模式避免重複）",
+)
+async def bulk_insert_daily_prices(
+    stock_id: int,
+    data: DailyPriceBulkCreate,
+    db: AsyncSession = Depends(get_db),
+) -> Response[dict]:
+    """Bulk insert daily prices for a stock.
+
+    Args:
+        stock_id: Stock ID
+        data: Bulk price data
+        db: Database session
+
+    Returns:
+        Response[dict]: Insert result with count
+
+    Raises:
+        HTTPException: 404 if stock not found
+    """
+    stock = await service.StockService.get_by_id(db, stock_id)
+    if not stock:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stock not found: {stock_id}",
+        )
+
+    count = await service.DailyPriceService.bulk_insert_prices(
+        db,
+        stock_id=stock_id,
+        prices=data.prices,
+    )
+
+    return Response(
+        data={
+            "stock_id": stock_id,
+            "count": count,
+            "message": f"Successfully inserted/updated {count} price records",
+        }
+    )
+
+
+@router.get(
+    "/{stock_id}/ma/{period}",
+    response_model=Response[MovingAverageResponse],
+    summary="取得移動平均線",
+    description=f"計算股票的移動平均線（例如 200MA）",
+)
+async def get_moving_average(
+    stock_id: int,
+    period: int,
+    db: AsyncSession = Depends(get_db),
+    as_of_date: Optional[date] = Query(None, description="計算日期（若未提供則使用最新日期）"),
+) -> Response[MovingAverageResponse]:
+    """Get moving average for a stock.
+
+    Args:
+        stock_id: Stock ID
+        period: MA period (e.g., 200 for 200MA)
+        db: Database session
+        as_of_date: Calculation date
+
+    Returns:
+        Response[MovingAverageResponse]: MA calculation result
+
+    Raises:
+        HTTPException: 404 if stock not found
+        HTTPException: 400 if period is invalid
+    """
+    if period < 1 or period > 500:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Period must be between 1 and 500",
+        )
+
+    stock = await service.StockService.get_by_id(db, stock_id)
+    if not stock:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stock not found: {stock_id}",
+        )
+
+    ma_value, data_points = await service.DailyPriceService.calculate_ma(
+        db,
+        stock_id=stock_id,
+        period=period,
+        as_of_date=as_of_date,
+    )
+
+    # Use as_of_date if provided, otherwise use today
+    calculation_date = as_of_date or date.today()
+
+    return Response(
+        data=MovingAverageResponse(
+            stock_id=stock_id,
+            period=period,
+            date=calculation_date,
+            value=ma_value,
+            data_points=data_points,
+        )
+    )
