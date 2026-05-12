@@ -308,3 +308,223 @@ Soft delete a stock (marks as deleted, does not remove from database).
 **Note**: After deletion, the stock will no longer appear in list results or be accessible by symbol.
 
 ---
+
+## Daily Price Endpoints
+
+### List Daily Prices
+
+Get historical daily OHLCV (Open, High, Low, Close, Volume) prices for a stock with keyset pagination.
+
+**Endpoint**: `GET /stocks/{stock_id}/prices`
+
+**Path Parameters**:
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| stock_id  | integer | Yes      | Stock ID    |
+
+**Query Parameters**:
+
+| Parameter  | Type    | Required | Default | Description                                          |
+| ---------- | ------- | -------- | ------- | ---------------------------------------------------- |
+| start_date | date    | No       | -       | Start date (inclusive, format: YYYY-MM-DD)           |
+| end_date   | date    | No       | -       | End date (inclusive, format: YYYY-MM-DD)             |
+| cursor     | date    | No       | -       | Pagination cursor (date from previous page's last item) |
+| limit      | integer | No       | 100     | Maximum number of results (1-100)                    |
+
+**Response** (200 OK):
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "data": [
+      {
+        "id": 1,
+        "stock_id": 1,
+        "date": "2026-05-12",
+        "open": "600.00",
+        "high": "650.00",
+        "low": "590.00",
+        "close": "630.00",
+        "volume": 1000000,
+        "created_at": "2026-05-12T10:00:00Z"
+      }
+    ],
+    "next_cursor": "2026-05-10",
+    "has_more": true
+  }
+}
+```
+
+**Response Schema**:
+
+| Field       | Type            | Description                                    |
+| ----------- | --------------- | ---------------------------------------------- |
+| data        | array           | List of daily prices (sorted by date desc)     |
+| next_cursor | date \| null    | Cursor for next page (null if no more)         |
+| has_more    | boolean         | Whether more results exist                     |
+
+**DailyPrice Schema**:
+
+| Field      | Type      | Description            |
+| ---------- | --------- | ---------------------- |
+| id         | integer   | Price record ID        |
+| stock_id   | integer   | Stock ID               |
+| date       | date      | Trading date           |
+| open       | decimal   | Opening price          |
+| high       | decimal   | Highest price          |
+| low        | decimal   | Lowest price           |
+| close      | decimal   | Closing price          |
+| volume     | integer   | Trading volume         |
+| created_at | datetime  | Record creation time   |
+
+**Error Responses**:
+
+| Status | Message                     |
+| ------ | --------------------------- |
+| 404    | Stock not found: {stock_id} |
+
+---
+
+### Bulk Insert Daily Prices
+
+Bulk insert historical daily price data for a stock. Uses upsert mode to prevent duplicates (updates existing records for the same stock_id + date).
+
+**Endpoint**: `POST /stocks/{stock_id}/prices`
+
+**Path Parameters**:
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| stock_id  | integer | Yes      | Stock ID    |
+
+**Request Body**:
+
+```json
+{
+  "prices": [
+    {
+      "date": "2026-05-12",
+      "open": "600.00",
+      "high": "650.00",
+      "low": "590.00",
+      "close": "630.00",
+      "volume": 1000000
+    },
+    {
+      "date": "2026-05-11",
+      "open": "595.00",
+      "high": "640.00",
+      "low": "585.00",
+      "close": "620.00",
+      "volume": 950000
+    }
+  ]
+}
+```
+
+**Request Schema**:
+
+| Field  | Type   | Required | Constraints      | Description                   |
+| ------ | ------ | -------- | ---------------- | ----------------------------- |
+| prices | array  | Yes      | 1-1000 items     | List of daily price records   |
+
+**DailyPrice Item Schema**:
+
+| Field  | Type    | Required | Constraints            | Description      |
+| ------ | ------- | -------- | ---------------------- | ---------------- |
+| date   | date    | Yes      | -                      | Trading date     |
+| open   | decimal | Yes      | > 0                    | Opening price    |
+| high   | decimal | Yes      | > 0, >= open, >= close | Highest price    |
+| low    | decimal | Yes      | > 0, <= open, <= close | Lowest price     |
+| close  | decimal | Yes      | > 0                    | Closing price    |
+| volume | integer | Yes      | >= 0                   | Trading volume   |
+
+**Response** (201 Created):
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "stock_id": 1,
+    "count": 5,
+    "message": "Successfully inserted/updated 5 price records"
+  }
+}
+```
+
+**Error Responses**:
+
+| Status | Message                                    |
+| ------ | ------------------------------------------ |
+| 404    | Stock not found: {stock_id}                |
+| 422    | Validation error (OHLCV consistency check) |
+
+**OHLCV Validation Rules**:
+
+- `high >= low` (highest price must be >= lowest price)
+- `high >= open` (highest price must be >= opening price)
+- `high >= close` (highest price must be >= closing price)
+- `low <= open` (lowest price must be <= opening price)
+- `low <= close` (lowest price must be <= closing price)
+
+---
+
+### Get Moving Average
+
+Calculate moving average (MA) for a stock. Common periods include 5, 10, 20, 60, 200.
+
+**Endpoint**: `GET /stocks/{stock_id}/ma/{period}`
+
+**Path Parameters**:
+
+| Parameter | Type    | Required | Description                      |
+| --------- | ------- | -------- | -------------------------------- |
+| stock_id  | integer | Yes      | Stock ID                         |
+| period    | integer | Yes      | MA period (e.g., 200 for 200MA)  |
+
+**Query Parameters**:
+
+| Parameter  | Type | Required | Default | Description                               |
+| ---------- | ---- | -------- | ------- | ----------------------------------------- |
+| as_of_date | date | No       | today   | Calculation date (format: YYYY-MM-DD)     |
+
+**Response** (200 OK):
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "stock_id": 1,
+    "period": 200,
+    "date": "2026-05-12",
+    "value": "625.50",
+    "data_points": 200
+  }
+}
+```
+
+**Response Schema**:
+
+| Field       | Type            | Description                                  |
+| ----------- | --------------- | -------------------------------------------- |
+| stock_id    | integer         | Stock ID                                     |
+| period      | integer         | MA period requested                          |
+| date        | date            | Calculation date                             |
+| value       | decimal \| null | MA value (null if insufficient data points)  |
+| data_points | integer         | Actual data points used for calculation      |
+
+**Error Responses**:
+
+| Status | Message                                     |
+| ------ | ------------------------------------------- |
+| 404    | Stock not found: {stock_id}                 |
+| 400    | Period must be between 1 and 500            |
+
+**Note**: If `data_points < period`, `value` will be `null` indicating insufficient historical data for the requested MA period.
+
+---

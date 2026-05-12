@@ -1,11 +1,11 @@
 """Stock schemas."""
 
-from datetime import datetime
+import datetime
 from decimal import Decimal
 from enum import IntEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class StockSource(IntEnum):
@@ -48,8 +48,8 @@ class TickerResponse(BaseModel):
 class IntradayCandle(BaseModel):
     """Fugo intraday OHLC candle."""
 
-    candle_date: datetime = Field(..., alias="date", description="日期")
-    candle_time: datetime | None = Field(None, alias="time", description="時間")
+    candle_date: datetime.datetime = Field(..., alias="date", description="日期")
+    candle_time: datetime.datetime | None = Field(None, alias="time", description="時間")
     open: Decimal = Field(..., description="開盤價")
     high: Decimal = Field(..., description="最高價")
     low: Decimal = Field(..., description="最低價")
@@ -62,7 +62,7 @@ class IntradayCandle(BaseModel):
 class HistoricalCandle(BaseModel):
     """Fugo historical OHLC candle."""
 
-    candle_date: datetime = Field(..., alias="date", description="日期")
+    candle_date: datetime.datetime = Field(..., alias="date", description="日期")
     open: Decimal = Field(..., description="開盤價")
     high: Decimal = Field(..., description="最高價")
     low: Decimal = Field(..., description="最低價")
@@ -116,3 +116,85 @@ class StockUpdate(BaseModel):
     current_price: Decimal | None = Field(None, ge=0, le=100000)
     calculated_indicators: dict[str, Any] | None = None
     is_active: bool | None = None
+
+
+class DailyPriceBase(BaseModel):
+    """日K線基礎 schema"""
+
+    date: datetime.date = Field(..., description="日期")
+    open: Decimal = Field(..., gt=0, description="開盤價")
+    high: Decimal = Field(..., gt=0, description="最高價")
+    low: Decimal = Field(..., gt=0, description="最低價")
+    close: Decimal = Field(..., gt=0, description="收盤價")
+    volume: int = Field(..., ge=0, description="成交量")
+
+    @field_validator("high")
+    @classmethod
+    def validate_high(cls, v: Decimal, info: Any) -> Decimal:
+        """驗證最高價 >= 開盤價/收盤價"""
+        values = info.data
+        if "open" in values and v < values["open"]:
+            raise ValueError("high must be >= open")
+        if "close" in values and v < values["close"]:
+            raise ValueError("high must be >= close")
+        return v
+
+    @field_validator("low")
+    @classmethod
+    def validate_low(cls, v: Decimal, info: Any) -> Decimal:
+        """驗證最低價 <= 開盤價/收盤價"""
+        values = info.data
+        if "open" in values and v > values["open"]:
+            raise ValueError("low must be <= open")
+        if "close" in values and v > values["close"]:
+            raise ValueError("low must be <= close")
+        return v
+
+    @field_validator("high")
+    @classmethod
+    def validate_high_vs_low(cls, v: Decimal, info: Any) -> Decimal:
+        """驗證最高價 >= 最低價"""
+        values = info.data
+        if "low" in values and v < values["low"]:
+            raise ValueError("high must be >= low")
+        return v
+
+
+class DailyPriceCreate(DailyPriceBase):
+    """日K線創建請求"""
+
+    stock_id: int = Field(..., gt=0, description="股票 ID")
+
+
+class DailyPriceBulkCreate(BaseModel):
+    """日K線批量創建請求"""
+
+    prices: list[DailyPriceBase] = Field(..., min_length=1, max_length=1000, description="價格列表")
+
+
+class DailyPriceResponse(DailyPriceBase):
+    """日K線響應"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(..., description="價格 ID")
+    stock_id: int = Field(..., description="股票 ID")
+    created_at: datetime.datetime = Field(..., description="創建時間")
+
+
+class DailyPriceListResponse(BaseModel):
+    """日K線列表響應（Keyset 分頁）"""
+
+    data: list[DailyPriceResponse] = Field(..., description="價格列表")
+    next_cursor: datetime.date | None = Field(None, description="下一頁游標（日期）")
+    has_more: bool = Field(..., description="是否有更多數據")
+
+
+class MovingAverageResponse(BaseModel):
+    """移動平均線響應"""
+
+    stock_id: int = Field(..., description="股票 ID")
+    period: int = Field(..., description="移動平均期數")
+    date: datetime.date = Field(..., description="計算日期")
+    value: Decimal | None = Field(None, description="移動平均值（若數據不足則為 None）")
+    data_points: int = Field(..., description="實際使用數據點數")
