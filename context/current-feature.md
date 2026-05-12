@@ -1,69 +1,27 @@
-# Current Feature: DailyPrice Historical Data Table
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Create DailyPrice model with OHLCV fields (open, high, low, close, volume)
-- Add composite unique index on (stock_id, date) to prevent duplicates
-- Define Pydantic schemas for create/response with pagination support
-- Add service methods: bulk_insert, get_by_range, calculate_ma, get_latest
-- Create API endpoints: GET/POST /stocks/{stock_id}/prices, GET /stocks/{stock_id}/ma/{period}
-- Create Alembic migration with proper indexes
-- Add comprehensive tests for model, service, API, and edge cases
+<!-- Add goals when starting a new feature -->
 
 ## Notes
 
-### Database Design
-
-- Primary key: BIGSERIAL (project convention, avoid UUID for performance)
-- Foreign key: stock_id → stocks.id (Integer)
-- Date field: Date type, nullable=False
-- OHLCV: Numeric(10, 2), Volume: BigInteger
-- Composite unique index idx_daily_price_stock_date on (stock_id, date)
-- No NULL values, no soft delete (historical data is immutable)
-
-### Data Source
-
-- **Phase 1**: Manual/admin upload via API only (no yfinance integration yet)
-- POST /stocks/{stock_id}/prices endpoint for bulk insert (admin only)
-- yfinance integration deferred to future iteration
-
-### Performance
-
-- Expected volume: 100 stocks × 365 days × 5 years ≈ 182,500 rows
-- Composite index covers stock_id + date range queries
-- Redis caching for frequently calculated indicators (200MA)
-
-### Data Quality
-
-- Validate OHLCV consistency: high >= low, high >= open/close, low <= open/close
-- Handle missing data: weekends, holidays, suspended trading
-- No adjusted prices initially (future consideration for stock splits/dividends)
-
-### Backtesting Support
-
-- Ensure data completeness for accurate backtesting
-- Efficient date range queries via composite index
+<!-- Add notes when starting a new feature -->
 
 ## History
 
 - 2026-05-12: DailyPrice Historical Data Table
-  - Created DailyPrice model in src/stocks/model.py with BIGSERIAL PK, OHLCV fields, BigInteger volume
-  - Added composite unique constraint uq_daily_price_stock_date on (stock_id, date)
-  - Added composite index idx_daily_price_stock_date for efficient range queries
-  - Added Stock.daily_prices relationship with lazy="selectin" and order_by date desc
-  - Defined Pydantic schemas: DailyPriceBase, DailyPriceCreate, DailyPriceBulkCreate, DailyPriceResponse, DailyPriceListResponse, MovingAverageResponse
-  - Added OHLCV consistency validators (high >= open/close, low <= open/close, high >= low)
-  - Added DailyPriceService with bulk_insert_prices (upsert mode), get_prices_by_range (keyset pagination), calculate_ma, get_latest_prices
+  - Created DailyPrice model with BIGSERIAL PK, OHLCV fields, composite unique index on (stock_id, date)
+  - Added OHLCV consistency validators in Pydantic schemas
+  - Implemented DailyPriceService with bulk_insert (upsert), get_by_range, calculate_ma, get_latest
   - Created API endpoints: GET/POST /stocks/{stock_id}/prices, GET /stocks/{stock_id}/ma/{period}
-  - Created Alembic migration 2026-05-12_create_daily_prices_table.py
-  - Added 29 comprehensive tests covering router, service, and schema validations
+  - Added Alembic migration for daily_prices table
+  - 29 comprehensive tests covering router, service, schema validations
   - Updated API documentation in context/api/api-stock.md
-  - Fixed datetime import convention (use datetime.date/datetime.datetime with prefix)
-  - All stock-related tests pass (48/48)
 
 - 2026-05-10: Compound Condition Model Fix
   - Changed indicator_type, operator, target_value to nullable=True in model.py
