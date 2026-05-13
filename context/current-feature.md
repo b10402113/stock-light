@@ -1,16 +1,43 @@
-# Current Feature
+# Current Feature: Backtest Task API
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-<!-- Add goals when starting a new feature -->
+- ✅ Implement Trigger Task API - POST `/stocks/{stock_id}/backtest/trigger`
+  - Check DailyPrice data coverage for requested date range
+  - Return 200 OK if data complete, 202 Accepted + job_id if data missing
+- ✅ Implement Task Status API - GET `/tasks/{job_id}`
+  - Query ARQ job status (pending/in_progress/completed/failed)
+- ✅ Create ARQ Job `fetch_missing_daily_prices`
+  - Fetch missing historical prices from Fugle/YFinance based on stock source
+  - Upsert to DailyPrice table
+- ✅ Add BacktestService with coverage check and missing range calculation
+- ✅ Add tests for service, router, and edge cases (16 tests passing)
 
 ## Notes
 
-<!-- Add notes when starting a new feature -->
+- Use existing `idx_daily_price_stock_date` composite index for coverage queries
+- GET `/tasks/{job_id}` is in `src/tasks/router.py` module
+- New routers mounted in `src/main.py`
+- Trading day calculation skips weekends (weekday >= 5)
+- HTTP 202 returned via JSONResponse for pending status
+- Fixed circular import by updating imports in models/__init__.py
+
+## Implementation Summary
+
+- Created `src/backtest/` domain module with:
+  - `schema.py`: BacktestTriggerRequest, BacktestTriggerResponse, TaskStatusResponse
+  - `service.py`: BacktestService with check_data_coverage, get_existing_dates, calculate_missing_ranges, trigger_fetch_job
+  - `router.py`: POST /stocks/{stock_id}/backtest/trigger endpoint
+- Created `src/tasks/router.py`: GET /tasks/{job_id} endpoint
+- Created `src/tasks/jobs/backtest_jobs.py`: fetch_missing_daily_prices ARQ job
+- Updated `src/tasks/jobs/__init__.py` and `src/tasks/worker.py` to register new job
+- Added historical prices method to `src/clients/yfinance_client.py`
+- Fixed circular import in `src/models/__init__.py`
+- Created comprehensive tests in `tests/test_backtest_service.py` and `tests/test_backtest_router.py`
 
 ## History
 

@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.clients.fugle_client import FugoClient
 from src.clients.redis_client import StockRedisClient
 from src.config import settings
-from src.models import Stock
+from src.stocks.model import Stock
 from src.stocks.schema import StockSource, StockMarket
 from src.tasks.worker import update_stock_prices_master, update_stock_prices_batch
 from src.tasks.config import redis_settings
