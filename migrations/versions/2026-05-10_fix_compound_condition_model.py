@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'fix_compound_condition_model'
-down_revision: Union[str, None] = 'scheduled_reminders_table'
+down_revision: Union[str, None] = 'scheduled_reminders'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
