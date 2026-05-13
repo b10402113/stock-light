@@ -130,3 +130,50 @@ class YFinanceClient:
                 ErrorCode.YFINANCE_API_ERROR,
                 f"YFinance price lookup failed for {symbol}: {str(e)}",
             ) from e
+
+    async def get_historical_prices(
+        self,
+        symbol: str,
+        start_date: str,
+        end_date: str,
+    ) -> list[dict]:
+        """Get historical OHLCV prices for a symbol.
+
+        Args:
+            symbol: Stock symbol (e.g., "AAPL", "2330.TW")
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
+
+        Returns:
+            List of dicts with date, open, high, low, close, volume
+
+        Raises:
+            BizException: On API errors
+        """
+        try:
+            ticker = await run_in_threadpool(lambda: yf.Ticker(symbol))
+            hist = await run_in_threadpool(
+                lambda: ticker.history(start=start_date, end=end_date, auto_adjust=False)
+            )
+
+            if hist.empty:
+                return []
+
+            # Convert DataFrame to list of dicts
+            result = []
+            for idx, row in hist.iterrows():
+                result.append({
+                    "date": idx.date(),
+                    "open": float(row.get("Open", 0)),
+                    "high": float(row.get("High", 0)),
+                    "low": float(row.get("Low", 0)),
+                    "close": float(row.get("Close", 0)),
+                    "volume": int(row.get("Volume", 0)),
+                })
+
+            return result
+        except Exception as e:
+            raise BizException(
+                ErrorCode.YFINANCE_API_ERROR,
+                f"YFinance historical prices failed for {symbol}: {str(e)}",
+            ) from e

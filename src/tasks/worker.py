@@ -8,6 +8,7 @@ from arq import cron
 from src.config import settings
 from src.tasks.config import redis_settings
 from src.tasks.jobs import (
+    fetch_missing_daily_prices,
     persist_redis_to_database,
     process_scheduled_reminders,
     startup,
@@ -29,6 +30,7 @@ class DefaultWorkerSettings:
         persist_redis_to_database,
         sync_active_stocks_to_redis,
         process_scheduled_reminders,
+        fetch_missing_daily_prices,
     ]
     on_startup = startup
     on_shutdown = shutdown

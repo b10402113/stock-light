@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from src.clients.redis_client import StockRedisClient
 from src.database import SessionFactory
-from src.models import Stock
+from src.stocks.model import Stock
 from src.users.model import User  # Import User to resolve relationship dependencies
 
 logger = logging.getLogger(__name__)

@@ -16,6 +16,8 @@ from src.watchlists.router import router as watchlists_router
 from src.subscriptions.router import router as subscriptions_router
 from src.notifications.router import router as notifications_router
 from src.plans.router import router as plans_router
+from src.backtest import backtest_router
+from src.tasks.router import router as tasks_router
 
 # Track application start time for uptime calculation
 APP_START_TIME = time.time()
@@ -139,3 +141,5 @@ app.include_router(watchlists_router)
 app.include_router(subscriptions_router)
 app.include_router(notifications_router)
 app.include_router(plans_router)
+app.include_router(backtest_router)
+app.include_router(tasks_router)
