@@ -1,45 +1,29 @@
-# Current Feature: Backtest Task API
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- ✅ Implement Trigger Task API - POST `/stocks/{stock_id}/backtest/trigger`
-  - Check DailyPrice data coverage for requested date range
-  - Return 200 OK if data complete, 202 Accepted + job_id if data missing
-- ✅ Implement Task Status API - GET `/tasks/{job_id}`
-  - Query ARQ job status (pending/in_progress/completed/failed)
-- ✅ Create ARQ Job `fetch_missing_daily_prices`
-  - Fetch missing historical prices from Fugle/YFinance based on stock source
-  - Upsert to DailyPrice table
-- ✅ Add BacktestService with coverage check and missing range calculation
-- ✅ Add tests for service, router, and edge cases (16 tests passing)
+<!-- Add goals when starting a new feature -->
 
 ## Notes
 
-- Use existing `idx_daily_price_stock_date` composite index for coverage queries
-- GET `/tasks/{job_id}` is in `src/tasks/router.py` module
-- New routers mounted in `src/main.py`
-- Trading day calculation skips weekends (weekday >= 5)
-- HTTP 202 returned via JSONResponse for pending status
-- Fixed circular import by updating imports in models/__init__.py
-
-## Implementation Summary
-
-- Created `src/backtest/` domain module with:
-  - `schema.py`: BacktestTriggerRequest, BacktestTriggerResponse, TaskStatusResponse
-  - `service.py`: BacktestService with check_data_coverage, get_existing_dates, calculate_missing_ranges, trigger_fetch_job
-  - `router.py`: POST /stocks/{stock_id}/backtest/trigger endpoint
-- Created `src/tasks/router.py`: GET /tasks/{job_id} endpoint
-- Created `src/tasks/jobs/backtest_jobs.py`: fetch_missing_daily_prices ARQ job
-- Updated `src/tasks/jobs/__init__.py` and `src/tasks/worker.py` to register new job
-- Added historical prices method to `src/clients/yfinance_client.py`
-- Fixed circular import in `src/models/__init__.py`
-- Created comprehensive tests in `tests/test_backtest_service.py` and `tests/test_backtest_router.py`
+<!-- Add notes when starting a new feature -->
 
 ## History
+
+- 2026-05-13: Backtest Task API
+  - Created src/backtest/ domain module with schema, service, router
+  - Implemented POST /stocks/{stock_id}/backtest/trigger endpoint
+  - Implemented GET /tasks/{job_id} endpoint for ARQ job status
+  - Created fetch_missing_daily_prices ARQ job for historical price fetching
+  - Added BacktestService with check_data_coverage, calculate_missing_ranges
+  - Added get_historical_prices method to YFinanceClient
+  - Fixed circular import in models/__init__.py
+  - Mounted new routers in main.py
+  - 16 comprehensive tests for service and routers (all passing)
 
 - 2026-05-12: DailyPrice Historical Data Table
   - Created DailyPrice model with BIGSERIAL PK, OHLCV fields, composite unique index on (stock_id, date)
