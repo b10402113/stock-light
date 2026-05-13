@@ -1,5 +1,6 @@
 import asyncio
 from decimal import Decimal
+from datetime import date, timedelta
 from typing import AsyncGenerator
 
 import pytest
@@ -7,6 +8,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
+from testcontainers.redis import RedisContainer
 
 from src.main import app
 from src.database import get_db
@@ -16,6 +18,7 @@ from src.stocks.model import Stock, DailyPrice  # noqa: F401 - Ensure model is r
 from src.watchlists.model import Watchlist, WatchlistStock  # noqa: F401 - Ensure model is registered with Base
 from src.subscriptions.model import IndicatorSubscription, NotificationHistory  # noqa: F401 - Ensure model is registered with Base
 from src.plans.model import LevelConfig, Plan  # noqa: F401 - Ensure model is registered with Base
+from src.clients.redis_client import StockRedisClient
 import bcrypt
 
 
@@ -24,6 +27,15 @@ import bcrypt
 def postgres_container():
     """Start PostgreSQL container for testing session."""
     container = PostgresContainer("postgres:15")
+    container.start()
+    yield container
+    container.stop()
+
+
+@pytest.fixture(scope="session")
+def redis_container():
+    """Start Redis container for testing session."""
+    container = RedisContainer()
     container.start()
     yield container
     container.stop()
@@ -191,3 +203,106 @@ async def test_subscription_id(
     await db_session.commit()
     await db_session.refresh(subscription)
     return subscription.id
+
+
+@pytest_asyncio.fixture(scope="function")
+async def redis_client(redis_container) -> StockRedisClient:
+    """Create Redis client for testing."""
+    redis_url = f"redis://{redis_container.get_container_host_ip()}:{redis_container.get_exposed_port(6379)}"
+    client = StockRedisClient(redis_url=redis_url)
+    yield client
+    await client.close()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def seeded_user(db_session: AsyncSession) -> User:
+    """Create a seeded user for tests."""
+    # Seed level configs first
+    level_configs = [
+        LevelConfig(level=1, name="Regular", monthly_price=0, yearly_price=0, max_subscriptions=10, max_alerts=10, is_purchasable=False),
+        LevelConfig(level=2, name="Pro", monthly_price=99, yearly_price=999, max_subscriptions=50, max_alerts=50, is_purchasable=True),
+        LevelConfig(level=3, name="Pro Max", monthly_price=199, yearly_price=1999, max_subscriptions=100, max_alerts=100, is_purchasable=True),
+        LevelConfig(level=4, name="Admin", monthly_price=0, yearly_price=0, max_subscriptions=-1, max_alerts=-1, is_purchasable=False),
+    ]
+    for lc in level_configs:
+        db_session.add(lc)
+    await db_session.commit()
+
+    # Create user
+    user = User(
+        email="test@example.com",
+        hashed_password=bcrypt.hashpw(b"password123", bcrypt.gensalt()).decode(),
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    # Create Level 1 plan for user
+    from datetime import datetime
+    plan = Plan(
+        user_id=user.id,
+        level=1,
+        billing_cycle="yearly",
+        price=0,
+        due_date=datetime.max,
+        is_active=True,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+
+    return user
+
+
+@pytest_asyncio.fixture(scope="function")
+async def seeded_stock(db_session: AsyncSession) -> Stock:
+    """Create a seeded stock for tests."""
+    stock = Stock(
+        symbol="2330.TW",
+        name="台積電",
+        is_active=True,
+        source=1,  # Fugle
+    )
+    db_session.add(stock)
+    await db_session.commit()
+    await db_session.refresh(stock)
+    return stock
+
+
+@pytest_asyncio.fixture(scope="function")
+async def seeded_stock_with_prices(db_session: AsyncSession) -> Stock:
+    """Create a seeded stock with 100 days of historical prices."""
+    stock = Stock(
+        symbol="2330.TW",
+        name="台積電",
+        is_active=True,
+        source=1,  # Fugle
+    )
+    db_session.add(stock)
+    await db_session.commit()
+    await db_session.refresh(stock)
+
+    # Create 100 days of historical prices
+    prices = []
+    base_price = Decimal("500.00")
+    for i in range(100):
+        day = date.today() - timedelta(days=100 - i)
+        # Simulate slight price variations
+        price_offset = Decimal(str(i * 0.5))
+        prices.append(
+            DailyPrice(
+                stock_id=stock.id,
+                date=day,
+                open=base_price + price_offset,
+                high=base_price + price_offset + Decimal("5"),
+                low=base_price + price_offset - Decimal("5"),
+                close=base_price + price_offset + Decimal("2"),
+                volume=1000000 + i * 1000,
+            )
+        )
+
+    for price in prices:
+        db_session.add(price)
+    await db_session.commit()
+
+    return stock

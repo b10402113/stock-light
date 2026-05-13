@@ -1,6 +1,6 @@
 """Subscription API endpoints."""
 
-from typing import Optional
+from typing import AsyncGenerator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
@@ -25,6 +25,25 @@ from src.subscriptions.schema import (
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 
+# ============ Redis Client Dependency ============
+
+
+async def get_redis_client() -> AsyncGenerator[StockRedisClient, None]:
+    """Dependency that creates Redis client for each request.
+
+    Creates a new Redis connection for each request to avoid event loop issues.
+    For production, consider using app state to manage a shared pool.
+
+    Yields:
+        StockRedisClient: Redis client instance
+    """
+    client = StockRedisClient()
+    try:
+        yield client
+    finally:
+        await client.close()
+
+
 # ============ Scheduled Reminder Endpoints (before /{subscription_id}) ============
 
 
@@ -37,32 +56,21 @@ router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 async def list_reminders(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis_client: StockRedisClient = Depends(get_redis_client),
     cursor: Optional[int] = Query(None, description="分頁游標（上一頁最後一筆的 ID）"),
     limit: int = Query(20, ge=1, le=100, description="每頁數量"),
 ) -> Response[ScheduledReminderListResponse]:
-    """List all scheduled reminders for the current user.
-
-    Args:
-        current_user: Current authenticated user
-        db: Database session
-        cursor: Pagination cursor
-        limit: Items per page
-
-    Returns:
-        Response[ScheduledReminderListResponse]: List of reminders with stock details
-    """
+    """List all scheduled reminders for the current user."""
     reminders, next_cursor = await service.ScheduledReminderService.get_user_reminders(
         db, current_user.id, cursor, limit
     )
 
-    redis_client = StockRedisClient()
     response_data = [
         await service.ScheduledReminderService.enrich_reminder_with_stock(
             db, reminder, redis_client
         )
         for reminder in reminders
     ]
-    await redis_client.close()
 
     return Response(
         data=ScheduledReminderListResponse(
@@ -84,20 +92,9 @@ async def create_reminder(
     data: ScheduledReminderCreate,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis_client: StockRedisClient = Depends(get_redis_client),
 ) -> Response[ScheduledReminderResponse]:
-    """Create a new scheduled reminder.
-
-    Args:
-        data: Reminder creation data
-        current_user: Current authenticated user
-        db: Database session
-
-    Returns:
-        Response[ScheduledReminderResponse]: Created reminder with stock details
-
-    Raises:
-        HTTPException: 403 if quota exceeded, 400 if stock not found or duplicate, 409 if conflict
-    """
+    """Create a new scheduled reminder."""
     try:
         reminder = await service.ScheduledReminderService.create(db, current_user.id, data)
     except IntegrityError:
@@ -116,11 +113,9 @@ async def create_reminder(
             detail=str(e),
         )
 
-    redis_client = StockRedisClient()
     response = await service.ScheduledReminderService.enrich_reminder_with_stock(
         db, reminder, redis_client
     )
-    await redis_client.close()
 
     return Response(data=response)
 
@@ -135,20 +130,9 @@ async def get_reminder(
     reminder_id: int,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis_client: StockRedisClient = Depends(get_redis_client),
 ) -> Response[ScheduledReminderResponse]:
-    """Get a single scheduled reminder.
-
-    Args:
-        reminder_id: Reminder ID
-        current_user: Current authenticated user
-        db: Database session
-
-    Returns:
-        Response[ScheduledReminderResponse]: Reminder details with stock info
-
-    Raises:
-        HTTPException: 404 if reminder not found or not owned by user
-    """
+    """Get a single scheduled reminder."""
     reminder = await service.ScheduledReminderService.get_by_id(db, reminder_id)
     if not reminder or reminder.user_id != current_user.id:
         raise HTTPException(
@@ -156,11 +140,9 @@ async def get_reminder(
             detail=f"Reminder not found: {reminder_id}",
         )
 
-    redis_client = StockRedisClient()
     response = await service.ScheduledReminderService.enrich_reminder_with_stock(
         db, reminder, redis_client
     )
-    await redis_client.close()
 
     return Response(data=response)
 
@@ -176,21 +158,9 @@ async def update_reminder(
     data: ScheduledReminderUpdate,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis_client: StockRedisClient = Depends(get_redis_client),
 ) -> Response[ScheduledReminderResponse]:
-    """Update a scheduled reminder.
-
-    Args:
-        reminder_id: Reminder ID
-        data: Reminder update data
-        current_user: Current authenticated user
-        db: Database session
-
-    Returns:
-        Response[ScheduledReminderResponse]: Updated reminder with stock details
-
-    Raises:
-        HTTPException: 404 if reminder not found or not owned by user
-    """
+    """Update a scheduled reminder."""
     reminder = await service.ScheduledReminderService.get_by_id(db, reminder_id)
     if not reminder or reminder.user_id != current_user.id:
         raise HTTPException(
@@ -200,11 +170,9 @@ async def update_reminder(
 
     updated = await service.ScheduledReminderService.update(db, reminder, data)
 
-    redis_client = StockRedisClient()
     response = await service.ScheduledReminderService.enrich_reminder_with_stock(
         db, updated, redis_client
     )
-    await redis_client.close()
 
     return Response(data=response)
 
@@ -219,20 +187,9 @@ async def delete_reminder(
     reminder_id: int,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis_client: StockRedisClient = Depends(get_redis_client),
 ) -> Response[ScheduledReminderResponse]:
-    """Soft delete a scheduled reminder.
-
-    Args:
-        reminder_id: Reminder ID
-        current_user: Current authenticated user
-        db: Database session
-
-    Returns:
-        Response[ScheduledReminderResponse]: Deleted reminder with stock details
-
-    Raises:
-        HTTPException: 404 if reminder not found or not owned by user
-    """
+    """Soft delete a scheduled reminder."""
     reminder = await service.ScheduledReminderService.get_by_id(db, reminder_id)
     if not reminder or reminder.user_id != current_user.id:
         raise HTTPException(
@@ -242,11 +199,9 @@ async def delete_reminder(
 
     deleted = await service.ScheduledReminderService.soft_delete(db, reminder)
 
-    redis_client = StockRedisClient()
     response = await service.ScheduledReminderService.enrich_reminder_with_stock(
         db, deleted, redis_client
     )
-    await redis_client.close()
 
     return Response(data=response)
 
@@ -263,32 +218,21 @@ async def delete_reminder(
 async def list_subscriptions(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis_client: StockRedisClient = Depends(get_redis_client),
     cursor: Optional[int] = Query(None, description="分頁游標（上一頁最後一筆的 ID）"),
     limit: int = Query(20, ge=1, le=100, description="每頁數量"),
 ) -> Response[SubscriptionListResponse]:
-    """List all subscriptions for the current user.
-
-    Args:
-        current_user: Current authenticated user
-        db: Database session
-        cursor: Pagination cursor
-        limit: Items per page
-
-    Returns:
-        Response[SubscriptionListResponse]: List of subscriptions with stock details
-    """
+    """List all subscriptions for the current user."""
     subscriptions, next_cursor = await service.SubscriptionService.get_user_subscriptions(
         db, current_user.id, cursor, limit
     )
 
-    redis_client = StockRedisClient()
     response_data = [
         await service.SubscriptionService.enrich_subscription_with_stock(
             db, sub, redis_client
         )
         for sub in subscriptions
     ]
-    await redis_client.close()
 
     return Response(
         data=SubscriptionListResponse(
@@ -310,22 +254,13 @@ async def create_subscription(
     data: IndicatorSubscriptionCreate,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis_client: StockRedisClient = Depends(get_redis_client),
 ) -> Response[IndicatorSubscriptionResponse]:
-    """Create a new subscription.
-
-    Args:
-        data: Subscription creation data (includes title, message, signal_type)
-        current_user: Current authenticated user
-        db: Database session
-
-    Returns:
-        Response[IndicatorSubscriptionResponse]: Created subscription with stock details
-
-    Raises:
-        HTTPException: 403 if quota exceeded, 400 if stock not found or duplicate, 409 if conflict
-    """
+    """Create a new subscription."""
     try:
-        subscription = await service.SubscriptionService.create(db, current_user.id, data)
+        subscription = await service.SubscriptionService.create(
+            db, current_user.id, data, redis_client
+        )
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -342,11 +277,9 @@ async def create_subscription(
             detail=str(e),
         )
 
-    redis_client = StockRedisClient()
     response = await service.SubscriptionService.enrich_subscription_with_stock(
         db, subscription, redis_client
     )
-    await redis_client.close()
 
     return Response(data=response)
 
@@ -361,20 +294,9 @@ async def get_subscription(
     subscription_id: int,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis_client: StockRedisClient = Depends(get_redis_client),
 ) -> Response[IndicatorSubscriptionResponse]:
-    """Get a single subscription.
-
-    Args:
-        subscription_id: Subscription ID
-        current_user: Current authenticated user
-        db: Database session
-
-    Returns:
-        Response[IndicatorSubscriptionResponse]: Subscription details with stock info
-
-    Raises:
-        HTTPException: 404 if subscription not found or not owned by user
-    """
+    """Get a single subscription."""
     subscription = await service.SubscriptionService.get_by_id(db, subscription_id)
     if not subscription or subscription.user_id != current_user.id:
         raise HTTPException(
@@ -382,11 +304,9 @@ async def get_subscription(
             detail=f"Subscription not found: {subscription_id}",
         )
 
-    redis_client = StockRedisClient()
     response = await service.SubscriptionService.enrich_subscription_with_stock(
         db, subscription, redis_client
     )
-    await redis_client.close()
 
     return Response(data=response)
 
@@ -402,21 +322,9 @@ async def update_subscription(
     data: IndicatorSubscriptionUpdate,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis_client: StockRedisClient = Depends(get_redis_client),
 ) -> Response[IndicatorSubscriptionResponse]:
-    """Update a subscription.
-
-    Args:
-        subscription_id: Subscription ID
-        data: Subscription update data
-        current_user: Current authenticated user
-        db: Database session
-
-    Returns:
-        Response[IndicatorSubscriptionResponse]: Updated subscription with stock details
-
-    Raises:
-        HTTPException: 404 if subscription not found or not owned by user
-    """
+    """Update a subscription."""
     subscription = await service.SubscriptionService.get_by_id(db, subscription_id)
     if not subscription or subscription.user_id != current_user.id:
         raise HTTPException(
@@ -426,11 +334,9 @@ async def update_subscription(
 
     updated = await service.SubscriptionService.update(db, subscription, data)
 
-    redis_client = StockRedisClient()
     response = await service.SubscriptionService.enrich_subscription_with_stock(
         db, updated, redis_client
     )
-    await redis_client.close()
 
     return Response(data=response)
 
@@ -445,20 +351,9 @@ async def delete_subscription(
     subscription_id: int,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis_client: StockRedisClient = Depends(get_redis_client),
 ) -> Response[IndicatorSubscriptionResponse]:
-    """Soft delete a subscription.
-
-    Args:
-        subscription_id: Subscription ID
-        current_user: Current authenticated user
-        db: Database session
-
-    Returns:
-        Response[IndicatorSubscriptionResponse]: Deleted subscription with stock details
-
-    Raises:
-        HTTPException: 404 if subscription not found or not owned by user
-    """
+    """Soft delete a subscription."""
     subscription = await service.SubscriptionService.get_by_id(db, subscription_id)
     if not subscription or subscription.user_id != current_user.id:
         raise HTTPException(
@@ -468,10 +363,8 @@ async def delete_subscription(
 
     deleted = await service.SubscriptionService.soft_delete(db, subscription)
 
-    redis_client = StockRedisClient()
     response = await service.SubscriptionService.enrich_subscription_with_stock(
         db, deleted, redis_client
     )
-    await redis_client.close()
 
     return Response(data=response)

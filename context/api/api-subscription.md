@@ -107,6 +107,17 @@ Create a new indicator subscription. Quota is validated against the user's Plan 
 
 **Authentication**: Required (JWT Bearer token)
 
+**Automatic Data Preparation**: When creating a subscription for an indicator-based condition (RSI, MACD, KD), the system automatically checks and prepares necessary data:
+
+1. **Redis Active Status Check**: Verifies if the stock is in the Redis active monitoring set
+2. **Historical Data Check**: Checks if at least 30 days of historical prices exist (required for indicator calculation)
+3. **Data Preparation Trigger**: If either check fails, an ARQ worker job is enqueued to:
+   - Add stock to Redis active monitoring set
+   - Fetch current price from API and update Redis cache
+   - Fetch 100 days of historical prices and save to database
+
+**Note**: Price-only subscriptions (`indicator_type: "price"`) do not trigger data preparation as they don't require historical data or indicator calculations.
+
 **Request Body**:
 
 ```json
@@ -237,6 +248,28 @@ Compound conditions allow combining multiple indicator conditions with AND/OR lo
 | 400    | Duplicate subscription already exists |
 | 403    | Subscription quota exceeded: used X/Y |
 | 409    | Subscription already exists           |
+
+**Data Preparation Flow**:
+
+```
+Subscription Creation
+    ↓
+Extract Indicator Types
+    ↓
+Check Redis Active Status ──→ Not Active ──→ Trigger Data Preparation
+    ↓ Active                                      ↓
+Check Historical Prices (< 30 days) ──→ Missing ──→ Trigger Data Preparation
+    ↓ ≥ 30 days                                   ↓
+Create Subscription                      Enqueue ARQ Job: prepare_subscription_data
+                                             ↓
+                                         Add to Redis Active Set
+                                             ↓
+                                         Fetch Current Price → Update Redis
+                                             ↓
+                                         Fetch 100 Days → Save to Database
+```
+
+The data preparation job runs asynchronously and does not block the subscription creation response. If the stock already has sufficient data, no preparation job is triggered.
 
 ---
 

@@ -53,48 +53,27 @@ async def fetch_missing_daily_prices(
             for r in date_ranges
         ]
 
-        # Fetch historical prices based on source
+        # Fetch historical prices - ALWAYS use YFinance (free)
         all_prices = []
 
-        if source == StockSource.FUGLE:
-            fugle_client = FugoClient()
-            for start, end in ranges:
-                candles = await fugle_client.get_historical_candles(
-                    symbol,
-                    start.isoformat(),
-                    end.isoformat(),
-                )
-                for c in candles:
-                    all_prices.append(
-                        DailyPriceBase(
-                            date=c.candle_date.date() if hasattr(c.candle_date, "date") else c.candle_date,
-                            open=c.open,
-                            high=c.high,
-                            low=c.low,
-                            close=c.close,
-                            volume=c.volume,
-                        )
+        yfinance_client = YFinanceClient()
+        for start, end in ranges:
+            prices = await yfinance_client.get_historical_prices(
+                symbol,
+                start.isoformat(),
+                end.isoformat(),
+            )
+            for p in prices:
+                all_prices.append(
+                    DailyPriceBase(
+                        date=p["date"],
+                        open=p["open"],
+                        high=p["high"],
+                        low=p["low"],
+                        close=p["close"],
+                        volume=p["volume"],
                     )
-
-        elif source == StockSource.YFINANCE:
-            yfinance_client = YFinanceClient()
-            for start, end in ranges:
-                prices = await yfinance_client.get_historical_prices(
-                    symbol,
-                    start.isoformat(),
-                    end.isoformat(),
                 )
-                for p in prices:
-                    all_prices.append(
-                        DailyPriceBase(
-                            date=p["date"],
-                            open=p["open"],
-                            high=p["high"],
-                            low=p["low"],
-                            close=p["close"],
-                            volume=p["volume"],
-                        )
-                    )
 
         logger.info(f"Fetched {len(all_prices)} historical prices from API")
 
