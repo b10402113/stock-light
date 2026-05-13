@@ -14,6 +14,15 @@ Not Started
 
 ## History
 
+- 2026-05-14: Integration Test for prepare_subscription_data
+  - Created comprehensive test suite with 11 tests for ARQ job
+  - Test real yfinance API historical price fetching (100 days)
+  - Test Redis active stock set population and price storage
+  - Test database insertion with upsert behavior
+  - Test error handling for invalid symbols and non-existent stocks
+  - Fixed alembic migration dependency (scheduled_reminders -> scheduled_reminders)
+  - All 11 integration tests passing
+
 - 2026-05-13: Stock Subscription Notification Flow
   - Added automatic data availability validation before subscription creation
   - Check stock active status in Redis and historical price availability
