@@ -1,16 +1,45 @@
-# Current Feature
+# Stock Subscription Notification Flow
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-<!-- Add goals when starting a new feature -->
+- Validate subscription conditions (stock existence, indicator/operator legality)
+- Check stock active status and indicator data availability before subscription
+- Automatically trigger data preparation when stock data is incomplete
+- Integrate flow into POST `/subscriptions/indicators` endpoint service layer
 
 ## Notes
 
-<!-- Add notes when starting a new feature -->
+- 當用戶訂閱股票時,系統需自動檢查並準備必要數據,確保訂閱條件可正常監控
+- Worker 任務包含:取得即時股價、抓取 100 天歷史股價、計算技術指標
+- 霈避免重複計算已存在的指標,使用 caching 確認狀態
+- Worker 失敗時應有重試機制並記錄錯誤 log
+- API endpoint: POST `/subscriptions/indicators`
+- Implementation adds validation before subscription creation:
+  - Check if stock is in Redis active set
+  - Check if stock has >=30 days of historical prices (for indicator calculation)
+  - Trigger ARQ job to prepare data if checks fail
+- Added helper methods:
+  - extract_indicator_types: Extracts indicator types from single/compound conditions
+  - check_stock_data_availability: Checks Redis active status + historical prices
+  - trigger_data_preparation: Enqueues ARQ job for data preparation
+- New ARQ job: prepare_subscription_data
+  - Adds stock to Redis active set
+  - Fetches current price from API and updates Redis
+  - Fetches 100 days of historical prices and saves to database
+- Tests: 14 comprehensive tests covering validation logic and integration
+
+## References
+
+- src/stocks/model.py - Stock model definition
+- src/subscriptions/schema.py - Subscription request schema
+- src/stocks/indicators.py - Technical indicator calculation logic
+- src/tasks/worker.py - ARQ Worker task definitions
+- doc/rules/database.md - Database constraints and soft delete rules
+- context/features/history-stock-download-worker.md - Related worker task spec
 
 ## History
 
@@ -21,7 +50,7 @@ Not Started
   - Created fetch_missing_daily_prices ARQ job for historical price fetching
   - Added BacktestService with check_data_coverage, calculate_missing_ranges
   - Added get_historical_prices method to YFinanceClient
-  - Fixed circular import in models/__init__.py
+  - Fixed circular import in models/**init**.py
   - Mounted new routers in main.py
   - 16 comprehensive tests for service and routers (all passing)
 
@@ -125,7 +154,7 @@ Not Started
   - Created seed script scripts/seed_100_test_stocks.py (102 stocks seeded)
   - Test suite covers 5 test classes with 9 tests:
     - TestRealFugleAPICalls: Real API price fetching (2 tests)
-    - TestRedisActiveStocks: Setting 100 stocks as active (2 tests)
+    - TestRedActiveStocks: Setting 100 stocks as active (2 tests)
     - TestBatchSizeEnforcement: Batch splitting verification (1 test)
     - TestBatchJobExecution: Batch task execution with real API (2 tests)
     - TestWorkerPerformance: Concurrent query performance (2 tests)

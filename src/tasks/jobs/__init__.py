@@ -4,6 +4,7 @@ from src.tasks.jobs.backtest_jobs import fetch_missing_daily_prices
 from src.tasks.jobs.lifecycle_jobs import startup, shutdown
 from src.tasks.jobs.price_update_jobs import update_stock_prices_master, update_stock_prices_batch
 from src.tasks.jobs.reminder_jobs import process_scheduled_reminders
+from src.tasks.jobs.subscription_jobs import prepare_subscription_data
 from src.tasks.jobs.sync_jobs import persist_redis_to_database, sync_active_stocks_to_redis
 
 __all__ = [
@@ -15,4 +16,5 @@ __all__ = [
     "sync_active_stocks_to_redis",
     "process_scheduled_reminders",
     "fetch_missing_daily_prices",
+    "prepare_subscription_data",
 ]

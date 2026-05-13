@@ -1,5 +1,6 @@
 """Subscription business logic."""
 
+import logging
 from datetime import datetime, timedelta, timezone, time
 from decimal import Decimal
 from typing import Optional
@@ -11,6 +12,7 @@ from src.clients.redis_client import StockRedisClient
 from src.plans import service as plans_service
 from src.stocks import service as stocks_service
 from src.stocks.model import Stock
+from src.stocks.service import DailyPriceService
 from src.subscriptions.model import IndicatorSubscription, NotificationHistory, ScheduledReminder
 from src.subscriptions.schema import (
     CompoundCondition,
@@ -23,6 +25,9 @@ from src.subscriptions.schema import (
     ScheduledReminderUpdate,
     StockBrief,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class SubscriptionService:
@@ -220,6 +225,7 @@ class SubscriptionService:
         db: AsyncSession,
         user_id: int,
         data: IndicatorSubscriptionCreate,
+        redis_client: StockRedisClient | None = None,
     ) -> IndicatorSubscription:
         """創建訂閱.
 
@@ -227,6 +233,7 @@ class SubscriptionService:
             db: 資料庫會話
             user_id: 用戶 ID
             data: 訂閱創建數據
+            redis_client: Redis client for data availability check (optional)
 
         Returns:
             IndicatorSubscription: 創建後的訂閱實體
@@ -260,6 +267,22 @@ class SubscriptionService:
                 raise ValueError(
                     f"Duplicate subscription already exists for this condition"
                 )
+
+        # Check stock data availability (Redis active status + historical prices)
+        indicator_types = SubscriptionService.extract_indicator_types(data)
+
+        if indicator_types and redis_client:  # Only check if we need indicator calculation
+            is_active_in_redis, has_indicator_data = await SubscriptionService.check_stock_data_availability(
+                db, data.stock_id, indicator_types, redis_client
+            )
+
+            # If stock is not active in Redis or lacks historical data, trigger preparation
+            if not is_active_in_redis or not has_indicator_data:
+                logger.info(
+                    f"Stock {data.stock_id} needs data preparation "
+                    f"(active_in_redis={is_active_in_redis}, has_data={has_indicator_data})"
+                )
+                await SubscriptionService.trigger_data_preparation(data.stock_id)
 
         subscription = IndicatorSubscription(
             user_id=user_id,
@@ -332,6 +355,95 @@ class SubscriptionService:
         await db.commit()
         await db.refresh(subscription)
         return subscription
+
+    @staticmethod
+    def extract_indicator_types(data: IndicatorSubscriptionCreate) -> list[str]:
+        """Extract all indicator types from subscription data.
+
+        Handles both single condition and compound condition formats.
+
+        Args:
+            data: Subscription creation data
+
+        Returns:
+            list[str]: List of indicator types (e.g., ["rsi", "kd", "macd"])
+        """
+        indicator_types = []
+
+        # Single condition
+        if data.indicator_type:
+            indicator_types.append(data.indicator_type.value)
+
+        # Compound condition - extract from all conditions
+        if data.compound_condition:
+            for condition in data.compound_condition.conditions:
+                if condition.indicator_type:
+                    indicator_types.append(condition.indicator_type.value)
+
+        # Remove duplicates and filter out "price" (no indicator calculation needed)
+        unique_types = list(set(indicator_types))
+        return [t for t in unique_types if t != "price"]
+
+    @staticmethod
+    async def trigger_data_preparation(stock_id: int) -> None:
+        """Trigger ARQ job to prepare stock data for subscription.
+
+        Args:
+            stock_id: Stock ID to prepare
+        """
+        from arq import create_pool
+        from arq.connections import ArqRedis
+        from src.tasks.config import redis_settings
+
+        try:
+            # Create ARQ pool and enqueue job
+            pool = await create_pool(redis_settings)
+            job = await pool.enqueue_job("prepare_subscription_data", stock_id)
+
+            if job:
+                logger.info(f"Triggered data preparation job for stock_id={stock_id}, job_id={job.job_id}")
+            else:
+                logger.warning(f"Failed to trigger data preparation job for stock_id={stock_id}")
+
+            await pool.close()
+        except Exception as e:
+            logger.error(f"Failed to enqueue data preparation job: {e}")
+            # Don't raise - data preparation is optional enhancement
+
+    @staticmethod
+    async def check_stock_data_availability(
+        db: AsyncSession,
+        stock_id: int,
+        indicator_types: list[str],
+        redis_client: StockRedisClient | None = None,
+    ) -> tuple[bool, bool]:
+        """Check if stock has active status in Redis and indicator data available.
+
+        Args:
+            db: Database session
+            stock_id: Stock ID
+            indicator_types: List of indicator types to check (e.g., ["rsi", "kd", "macd"])
+            redis_client: Redis client for active status check
+
+        Returns:
+            tuple[bool, bool]: (is_active_in_redis, has_indicator_data)
+        """
+        is_active_in_redis = False
+        has_indicator_data = False
+
+        # Check Redis active status
+        if redis_client:
+            active_stock_ids = await redis_client.get_active_stocks()
+            is_active_in_redis = stock_id in active_stock_ids
+
+        # Check if we have enough historical prices for indicator calculation
+        # For most technical indicators (RSI, KD, MACD), we need at least 30 days of data
+        if indicator_types:
+            prices = await DailyPriceService.get_latest_prices(db, stock_id, n=100)
+            # Check if we have at least 30 days of data (minimum for most indicators)
+            has_indicator_data = len(prices) >= 30
+
+        return is_active_in_redis, has_indicator_data
 
     @staticmethod
     async def get_active_subscriptions_for_stock(

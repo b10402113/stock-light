@@ -10,6 +10,7 @@ from src.tasks.config import redis_settings
 from src.tasks.jobs import (
     fetch_missing_daily_prices,
     persist_redis_to_database,
+    prepare_subscription_data,
     process_scheduled_reminders,
     startup,
     shutdown,
@@ -31,6 +32,7 @@ class DefaultWorkerSettings:
         sync_active_stocks_to_redis,
         process_scheduled_reminders,
         fetch_missing_daily_prices,
+        prepare_subscription_data,
     ]
     on_startup = startup
     on_shutdown = shutdown
