@@ -1,43 +1,16 @@
-# Current Feature: Indicator Subscription Timeframe and Period Fields
+# Current Feature
 
 ## Status
 
-Complete
+Not Started
 
 ## Goals
 
-- Add `timeframe` column (VARCHAR(1), D/W) and `period` column (SMALLINT, optional) to indicator_subscriptions table
-- Create Alembic migration with CHECK constraints and backfill existing data
-- Update Pydantic schemas with Timeframe enum and period validation (only for RSI/SMA)
-- Add GET `/subscriptions/indicators/config` endpoint returning indicator field requirements
-- Support configurable periods for RSI/SMA calculations in indicator calculation logic
-- Update compound condition schema to include timeframe/period per condition
-- Add comprehensive tests for validation, unique constraints, and indicator config endpoint
+<!-- Add goals when starting a new feature -->
 
 ## Notes
 
-### Field Defaults and Constraints
-
-- timeframe: Required, default "D" (day), options: D, W
-- period: Optional, applicable only to RSI (default 14, range 5-50) and SMA (default 20, range 5-200)
-- MACD, KD, PRICE have fixed periods - no period field allowed
-
-### Unique Constraint Update
-
-- Include timeframe and period in unique constraint to allow same stock with different timeframes/periods
-
-### Indicator Calculation Impact
-
-- calculated_indicators JSON structure needs nested format by timeframe
-- Job must respect subscription's timeframe when evaluating conditions
-- NOTE: Indicator calculation integration deferred until base indicator calculation is implemented
-
-### Reference Files
-
-- @src/subscriptions/schema.py - schemas to update
-- @src/subscriptions/model.py - database model
-- @src/stocks/indicators.py - calculation logic
-- @src/subscriptions/router.py - add config endpoint
+<!-- Add notes when starting a new feature -->
 
 ## History
 
