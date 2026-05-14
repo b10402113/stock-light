@@ -1,18 +1,59 @@
-# Current Feature
+# Current Feature: Indicator Subscription Timeframe and Period Fields
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-<!-- Add goals when starting a new feature -->
+- Add `timeframe` column (VARCHAR(1), D/W) and `period` column (SMALLINT, optional) to indicator_subscriptions table
+- Create Alembic migration with CHECK constraints and backfill existing data
+- Update Pydantic schemas with Timeframe enum and period validation (only for RSI/SMA)
+- Add GET `/subscriptions/indicators/config` endpoint returning indicator field requirements
+- Support configurable periods for RSI/SMA calculations in indicator calculation logic
+- Update compound condition schema to include timeframe/period per condition
+- Add comprehensive tests for validation, unique constraints, and indicator config endpoint
 
 ## Notes
 
-<!-- Add notes when starting a new feature -->
+### Field Defaults and Constraints
+
+- timeframe: Required, default "D" (day), options: D, W
+- period: Optional, applicable only to RSI (default 14, range 5-50) and SMA (default 20, range 5-200)
+- MACD, KD, PRICE have fixed periods - no period field allowed
+
+### Unique Constraint Update
+
+- Include timeframe and period in unique constraint to allow same stock with different timeframes/periods
+
+### Indicator Calculation Impact
+
+- calculated_indicators JSON structure needs nested format by timeframe
+- Job must respect subscription's timeframe when evaluating conditions
+- NOTE: Indicator calculation integration deferred until base indicator calculation is implemented
+
+### Reference Files
+
+- @src/subscriptions/schema.py - schemas to update
+- @src/subscriptions/model.py - database model
+- @src/stocks/indicators.py - calculation logic
+- @src/subscriptions/router.py - add config endpoint
 
 ## History
+
+- 2026-05-14: Indicator Subscription Timeframe and Period Fields
+  - Added timeframe (VARCHAR(1), D/W) and period (SMALLINT, optional) columns to indicator_subscriptions
+  - Created Alembic migration with CHECK constraints and updated unique index
+  - Added Timeframe enum (D, W) to Pydantic schemas
+  - Added period validation (only for RSI/SMA, range 5-200)
+  - Added SMA indicator type to IndicatorType enum
+  - Created GET /subscriptions/indicators/config endpoint
+  - Updated Condition model for compound conditions with timeframe/period
+  - Added IndicatorConfigResponse, IndicatorFieldConfig, TimeframeConfig, PeriodConfig schemas
+  - Updated check_duplicate to include timeframe and period
+  - Updated enrich_subscription_with_stock, create, update methods for new fields
+  - Added 28 comprehensive tests (validation, unique constraints, config endpoint)
+  - All 57 subscription-related tests passing
 
 - 2026-05-14: Integration Test for prepare_subscription_data
   - Created comprehensive test suite with 11 tests for ARQ job

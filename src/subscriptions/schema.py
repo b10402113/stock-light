@@ -17,6 +17,7 @@ class SignalType(StrEnum):
 class IndicatorType(StrEnum):
     """指標類型"""
     RSI = "rsi"
+    SMA = "sma"
     MACD = "macd"
     KD = "kd"
     PRICE = "price"
@@ -30,6 +31,12 @@ class Operator(StrEnum):
     LTE = "<="
     EQ = "=="
     NEQ = "!="
+
+
+class Timeframe(StrEnum):
+    """時間框架"""
+    D = "D"
+    W = "W"
 
 
 class SendStatus(StrEnum):
@@ -55,9 +62,19 @@ class LogicOperator(StrEnum):
 class Condition(BaseModel):
     """Single condition within a compound condition"""
 
-    indicator_type: IndicatorType = Field(..., description="Indicator type: rsi, macd, kd, price")
+    indicator_type: IndicatorType = Field(..., description="Indicator type: rsi, sma, macd, kd, price")
     operator: Operator = Field(..., description="Comparison operator: >, <, >=, <=, ==, !=")
     target_value: Decimal = Field(..., ge=0, description="Target threshold value")
+    timeframe: Timeframe = Field(Timeframe.D, description="Data timeframe: D (day) or W (week)")
+    period: Optional[int] = Field(None, ge=5, le=200, description="Indicator period for RSI/SMA")
+
+    @model_validator(mode="after")
+    def validate_period_for_indicator(self):
+        """Validate that period is only set for RSI/SMA indicators"""
+        if self.period is not None:
+            if self.indicator_type not in (IndicatorType.RSI, IndicatorType.SMA):
+                raise ValueError(f"period is not applicable for {self.indicator_type} indicator")
+        return self
 
 
 class CompoundCondition(BaseModel):
@@ -91,10 +108,20 @@ class IndicatorSubscriptionBase(BaseModel):
     title: str = Field("", max_length=50, description="Alert title (max 50 chars)")
     message: str = Field("", max_length=200, description="Alert message content (max 200 chars)")
     signal_type: SignalType = Field(SignalType.BUY, description="Signal type: buy or sell")
-    indicator_type: Optional[IndicatorType] = Field(None, description="Type of indicator (rsi, macd, kd, price)")
+    timeframe: Timeframe = Field(Timeframe.D, description="Data timeframe: D (day) or W (week)")
+    period: Optional[int] = Field(None, ge=5, le=200, description="Indicator period for RSI/SMA")
+    indicator_type: Optional[IndicatorType] = Field(None, description="Type of indicator (rsi, sma, macd, kd, price)")
     operator: Optional[Operator] = Field(None, description="Comparison operator")
     target_value: Optional[Decimal] = Field(None, ge=0, description="Target value for the indicator")
     compound_condition: Optional[CompoundCondition] = Field(None, description="Complex conditions (AND/OR logic)")
+
+    @model_validator(mode="after")
+    def validate_period_for_indicator(self):
+        """Validate that period is only set for RSI/SMA indicators"""
+        if self.period is not None:
+            if self.indicator_type not in (IndicatorType.RSI, IndicatorType.SMA):
+                raise ValueError(f"period is not applicable for {self.indicator_type} indicator")
+        return self
 
     @model_validator(mode="after")
     def validate_condition_fields(self):
@@ -121,6 +148,8 @@ class IndicatorSubscriptionUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=50, description="Alert title")
     message: Optional[str] = Field(None, max_length=200, description="Alert message content")
     signal_type: Optional[SignalType] = Field(None, description="Signal type")
+    timeframe: Optional[Timeframe] = Field(None, description="Data timeframe")
+    period: Optional[int] = Field(None, ge=5, le=200, description="Indicator period for RSI/SMA")
     indicator_type: Optional[IndicatorType] = Field(None, description="Type of indicator")
     operator: Optional[Operator] = Field(None, description="Comparison operator")
     target_value: Optional[Decimal] = Field(None, ge=0, description="Target value")
@@ -139,15 +168,50 @@ class IndicatorSubscriptionResponse(BaseModel):
     title: str
     message: str
     signal_type: str
-    indicator_type: str
-    operator: str
-    target_value: Decimal
+    timeframe: str
+    period: Optional[int] = None
+    indicator_type: Optional[str] = None
+    operator: Optional[str] = None
+    target_value: Optional[Decimal] = None
     compound_condition: Optional[CompoundCondition] = None
     is_triggered: bool
     cooldown_end_at: Optional[datetime] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class TimeframeConfig(BaseModel):
+    """Timeframe field configuration"""
+
+    required: bool = Field(..., description="Is timeframe required")
+    default: str = Field(..., description="Default timeframe value")
+    options: list[str] = Field(..., description="Available timeframe options")
+
+
+class PeriodConfig(BaseModel):
+    """Period field configuration"""
+
+    required: bool = Field(False, description="Is period required")
+    default: Optional[int] = Field(None, description="Default period value")
+    min: Optional[int] = Field(None, description="Minimum period value")
+    max: Optional[int] = Field(None, description="Maximum period value")
+
+
+class IndicatorFieldConfig(BaseModel):
+    """Configuration for a single indicator"""
+
+    label: str = Field(..., description="Human-readable indicator label")
+    timeframe: TimeframeConfig = Field(..., description="Timeframe configuration")
+    period: Optional[PeriodConfig] = Field(None, description="Period configuration (None if not applicable)")
+    operators: list[str] = Field(..., description="Available comparison operators")
+    note: Optional[str] = Field(None, description="Additional note for fixed-period indicators")
+
+
+class IndicatorConfigResponse(BaseModel):
+    """Response schema for GET /subscriptions/indicators/config"""
+
+    indicators: dict[str, IndicatorFieldConfig] = Field(..., description="Configuration for each indicator type")
 
 
 class ScheduledReminderCreate(BaseModel):

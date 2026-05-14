@@ -12,6 +12,7 @@ from src.database import get_db
 from src.response import Response
 from src.subscriptions import service
 from src.subscriptions.schema import (
+    IndicatorConfigResponse,
     IndicatorSubscriptionCreate,
     IndicatorSubscriptionResponse,
     IndicatorSubscriptionUpdate,
@@ -207,6 +208,25 @@ async def delete_reminder(
 
 
 # ============ Indicator Subscription Endpoints ============
+
+
+@router.get(
+    "/indicators/config",
+    response_model=Response[IndicatorConfigResponse],
+    summary="取得指標配置",
+    description="取得所有指標類型的欄位配置（時框、週期、運算子等）",
+)
+async def get_indicator_config() -> Response[IndicatorConfigResponse]:
+    """Get indicator field configuration for frontend.
+
+    Returns configuration for each indicator type including:
+    - Required/optional fields
+    - Default values
+    - Valid ranges
+    - Available operators
+    """
+    config = service.SubscriptionService.get_indicator_config()
+    return Response(data=config)
 
 
 @router.get(

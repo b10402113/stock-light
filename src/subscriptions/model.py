@@ -3,7 +3,7 @@
 from datetime import datetime, time, timezone
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Time, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Time, text, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,8 @@ class IndicatorSubscription(Base):
     title: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     message: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     signal_type: Mapped[str] = mapped_column(String(10), nullable=False, default="buy")
+    timeframe: Mapped[str] = mapped_column(String(1), nullable=False, default="D")
+    period: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     indicator_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     operator: Mapped[str | None] = mapped_column(String(10), nullable=True)
     target_value: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
@@ -42,6 +44,8 @@ class IndicatorSubscription(Base):
     )
 
     __table_args__ = (
+        CheckConstraint("timeframe IN ('D', 'W')", name="chk_timeframe_valid"),
+        CheckConstraint("(period >= 5 AND period <= 200) OR period IS NULL", name="chk_period_range"),
         Index(
             "idx_indicator_subs_on_stock_active",
             "stock_id",
@@ -59,6 +63,8 @@ class IndicatorSubscription(Base):
             "indicator_type",
             "operator",
             "target_value",
+            "timeframe",
+            "period",
             unique=True,
             postgresql_where="(is_deleted = false AND compound_condition IS NULL)"
         ),

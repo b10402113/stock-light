@@ -17,13 +17,17 @@ from src.subscriptions.model import IndicatorSubscription, NotificationHistory, 
 from src.subscriptions.schema import (
     CompoundCondition,
     FrequencyType,
+    IndicatorConfigResponse,
+    IndicatorFieldConfig,
     IndicatorSubscriptionCreate,
     IndicatorSubscriptionResponse,
     IndicatorSubscriptionUpdate,
+    PeriodConfig,
     ScheduledReminderCreate,
     ScheduledReminderResponse,
     ScheduledReminderUpdate,
     StockBrief,
+    TimeframeConfig,
 )
 
 
@@ -32,6 +36,72 @@ logger = logging.getLogger(__name__)
 
 class SubscriptionService:
     """指標訂閱業務邏輯"""
+
+    @staticmethod
+    def get_indicator_config() -> IndicatorConfigResponse:
+        """Get indicator field configuration for frontend.
+
+        Returns configuration for each indicator type including:
+        - Required/optional fields
+        - Default values
+        - Valid ranges
+        - Available operators
+
+        Returns:
+            IndicatorConfigResponse: Configuration for all indicator types
+        """
+        timeframe_config = TimeframeConfig(
+            required=True,
+            default="D",
+            options=["D", "W"]
+        )
+
+        indicators = {
+            "rsi": IndicatorFieldConfig(
+                label="RSI (Relative Strength Index)",
+                timeframe=timeframe_config,
+                period=PeriodConfig(
+                    required=False,
+                    default=14,
+                    min=5,
+                    max=50
+                ),
+                operators=[">", "<", ">=", "<=", "==", "!="]
+            ),
+            "sma": IndicatorFieldConfig(
+                label="SMA (Simple Moving Average)",
+                timeframe=timeframe_config,
+                period=PeriodConfig(
+                    required=False,
+                    default=20,
+                    min=5,
+                    max=200
+                ),
+                operators=[">", "<", ">=", "<=", "==", "!="]
+            ),
+            "macd": IndicatorFieldConfig(
+                label="MACD",
+                timeframe=timeframe_config,
+                period=None,
+                operators=[">", "<", ">=", "<=", "==", "!="],
+                note="Fixed periods: 12/26/9"
+            ),
+            "kd": IndicatorFieldConfig(
+                label="KD (Stochastic Oscillator)",
+                timeframe=timeframe_config,
+                period=None,
+                operators=[">", "<", ">=", "<=", "==", "!="],
+                note="Fixed period: 9"
+            ),
+            "price": IndicatorFieldConfig(
+                label="Price",
+                timeframe=timeframe_config,
+                period=None,
+                operators=[">", "<", ">=", "<=", "==", "!="]
+            )
+        }
+
+        return IndicatorConfigResponse(indicators=indicators)
 
     @staticmethod
     async def enrich_subscription_with_stock(
@@ -79,6 +149,8 @@ class SubscriptionService:
             title=subscription.title,
             message=subscription.message,
             signal_type=subscription.signal_type,
+            timeframe=subscription.timeframe,
+            period=subscription.period,
             indicator_type=subscription.indicator_type,
             operator=subscription.operator,
             target_value=subscription.target_value,
@@ -192,6 +264,8 @@ class SubscriptionService:
         indicator_type: str,
         operator: str,
         target_value: Decimal,
+        timeframe: str = "D",
+        period: int | None = None,
     ) -> bool:
         """檢查是否已存在相同訂閱.
 
@@ -202,6 +276,8 @@ class SubscriptionService:
             indicator_type: 指標類型
             operator: 運算子
             target_value: 目標值
+            timeframe: 時間框架 (D or W)
+            period: 週期 (optional)
 
         Returns:
             bool: 是否存在重複
@@ -215,6 +291,8 @@ class SubscriptionService:
                 IndicatorSubscription.indicator_type == indicator_type,
                 IndicatorSubscription.operator == operator,
                 IndicatorSubscription.target_value == target_value,
+                IndicatorSubscription.timeframe == timeframe,
+                IndicatorSubscription.period == period,
                 IndicatorSubscription.is_deleted.is_(False),
             )
         )
@@ -248,10 +326,23 @@ class SubscriptionService:
                 f"Subscription quota exceeded: used {used}/{quota}"
             )
 
-        # Verify stock exists and is active
+        # Verify stock exists
         stock = await db.get(Stock, data.stock_id)
-        if not stock or stock.is_deleted or not stock.is_active:
-            raise ValueError(f"Stock not found or inactive: {data.stock_id}")
+        if not stock or stock.is_deleted:
+            raise ValueError(f"Stock not found: {data.stock_id}")
+
+        # If stock is not active, activate it and add to Redis
+        if not stock.is_active:
+            logger.info(f"Activating stock {data.stock_id}")
+            stock.is_active = True
+
+            # Add to Redis active stocks if redis_client is available
+            if redis_client:
+                try:
+                    await redis_client.add_active_stock(data.stock_id)
+                    logger.info(f"Added stock {data.stock_id} to Redis active stocks")
+                except Exception as exc:
+                    logger.warning(f"Failed to add stock {data.stock_id} to Redis: {exc}")
 
         # Check for duplicate (only for single conditions)
         if data.indicator_type and data.operator and data.target_value:
@@ -262,6 +353,8 @@ class SubscriptionService:
                 data.indicator_type.value,
                 data.operator.value,
                 data.target_value,
+                data.timeframe.value,
+                data.period,
             )
             if is_duplicate:
                 raise ValueError(
@@ -290,6 +383,8 @@ class SubscriptionService:
             title=data.title,
             message=data.message,
             signal_type=data.signal_type.value,
+            timeframe=data.timeframe.value,
+            period=data.period,
             indicator_type=data.indicator_type.value if data.indicator_type else None,
             operator=data.operator.value if data.operator else None,
             target_value=data.target_value if data.target_value else None,
@@ -321,6 +416,8 @@ class SubscriptionService:
         # Convert enum values to strings if present
         if "signal_type" in update_data and update_data["signal_type"]:
             update_data["signal_type"] = update_data["signal_type"].value
+        if "timeframe" in update_data and update_data["timeframe"]:
+            update_data["timeframe"] = update_data["timeframe"].value
         if "indicator_type" in update_data and update_data["indicator_type"]:
             update_data["indicator_type"] = update_data["indicator_type"].value
         if "operator" in update_data and update_data["operator"]:
