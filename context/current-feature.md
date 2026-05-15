@@ -1,16 +1,40 @@
-# Current Feature
+# Current Feature: Subscription Worker Decoupling and Stock Indicator Table
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-<!-- Add goals when starting a new feature -->
+- Remove worker trigger from subscription creation endpoint
+- Mark subscribed stocks as `is_active=True` when creating indicator subscriptions
+- Create `stock_indicator` table with JSONB data storage
+- Add unique constraint on `(stock_id, indicator_key)` and indexes
+- Create `StockIndicator` SQLAlchemy model
+- Implement `StockIndicatorService` with upsert/query methods
+- Standardize indicator key format: `{TYPE}_{PARAMETERS}` (e.g., `RSI_14`, `MACD_12_26_9`)
+- Implement JSONB data structures for each indicator type
+- Create Alembic migration following database conventions
+- Update ARQ worker to periodically fetch active stocks with indicator subscriptions
+- Calculate and store indicator values in `stock_indicator` table
 
 ## Notes
 
-<!-- Add notes when starting a new feature -->
+**Decoupling Strategy:**
+- Subscription creation only persists data, no worker calls
+- Worker runs on schedule (cron) to process active stocks with subscriptions
+- Enables batch processing and better resource management
+
+**Stock Indicator Table Design:**
+- JSONB for flexible indicator data (RSI, KDJ, MACD have different schemas)
+- Indicator key enables filtering without parsing JSONB
+- GIN index for JSONB queries when needed
+
+**Indicator Key Examples:**
+- RSI: `RSI_14` → data: `{"value": 70.5}`
+- SMA: `SMA_20` → data: `{"value": 150.25}`
+- KDJ: `KDJ_9_3_3` → data: `{"k": 80, "d": 75, "j": 85}`
+- MACD: `MACD_12_26_9` → data: `{"macd": 0.5, "signal": 0.3, "histogram": 0.2}`
 
 ## History
 

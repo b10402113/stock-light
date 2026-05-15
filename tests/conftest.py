@@ -16,7 +16,8 @@ from src.models.base import Base, BaseWithoutAutoId
 from src.users.model import User  # noqa: F401 - Ensure model is registered with Base
 from src.stocks.model import Stock, DailyPrice  # noqa: F401 - Ensure model is registered with Base
 from src.watchlists.model import Watchlist, WatchlistStock  # noqa: F401 - Ensure model is registered with Base
-from src.subscriptions.model import IndicatorSubscription, NotificationHistory  # noqa: F401 - Ensure model is registered with Base
+from src.subscriptions.model import IndicatorSubscription, NotificationHistory, ScheduledReminder  # noqa: F401 - Ensure model is registered with Base
+from src.stock_indicator.model import StockIndicator  # noqa: F401 - Ensure model is registered with Base
 from src.plans.model import LevelConfig, Plan  # noqa: F401 - Ensure model is registered with Base
 from src.clients.redis_client import StockRedisClient
 import bcrypt

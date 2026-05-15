@@ -361,21 +361,8 @@ class SubscriptionService:
                     f"Duplicate subscription already exists for this condition"
                 )
 
-        # Check stock data availability (Redis active status + historical prices)
-        indicator_types = SubscriptionService.extract_indicator_types(data)
-
-        if indicator_types and redis_client:  # Only check if we need indicator calculation
-            is_active_in_redis, has_indicator_data = await SubscriptionService.check_stock_data_availability(
-                db, data.stock_id, indicator_types, redis_client
-            )
-
-            # If stock is not active in Redis or lacks historical data, trigger preparation
-            if not is_active_in_redis or not has_indicator_data:
-                logger.info(
-                    f"Stock {data.stock_id} needs data preparation "
-                    f"(active_in_redis={is_active_in_redis}, has_data={has_indicator_data})"
-                )
-                await SubscriptionService.trigger_data_preparation(data.stock_id)
+        # Stock activation is handled above - worker will periodically fetch
+        # active stocks with indicator subscriptions and calculate indicators
 
         subscription = IndicatorSubscription(
             user_id=user_id,

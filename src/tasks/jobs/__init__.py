@@ -1,6 +1,7 @@
 """Jobs package for ARQ worker tasks."""
 
 from src.tasks.jobs.backtest_jobs import fetch_missing_daily_prices
+from src.tasks.jobs.indicator_jobs import calculate_stock_indicators
 from src.tasks.jobs.lifecycle_jobs import startup, shutdown
 from src.tasks.jobs.price_update_jobs import update_stock_prices_master, update_stock_prices_batch
 from src.tasks.jobs.reminder_jobs import process_scheduled_reminders
@@ -17,4 +18,5 @@ __all__ = [
     "process_scheduled_reminders",
     "fetch_missing_daily_prices",
     "prepare_subscription_data",
+    "calculate_stock_indicators",
 ]

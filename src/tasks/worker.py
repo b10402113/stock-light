@@ -8,6 +8,7 @@ from arq import cron
 from src.config import settings
 from src.tasks.config import redis_settings
 from src.tasks.jobs import (
+    calculate_stock_indicators,
     fetch_missing_daily_prices,
     persist_redis_to_database,
     prepare_subscription_data,
@@ -33,6 +34,7 @@ class DefaultWorkerSettings:
         process_scheduled_reminders,
         fetch_missing_daily_prices,
         prepare_subscription_data,
+        calculate_stock_indicators,
     ]
     on_startup = startup
     on_shutdown = shutdown
@@ -67,6 +69,12 @@ class DefaultWorkerSettings:
         cron(
             process_scheduled_reminders,
             minute=settings.parse_cron_minutes(settings.CRON_REMINDER_MINUTES),
+            run_at_startup=False,
+        ),
+        # Calculate stock indicators: run every 5 minutes
+        cron(
+            calculate_stock_indicators,
+            minute=5,
             run_at_startup=False,
         ),
     ]
