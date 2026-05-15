@@ -65,35 +65,42 @@ class StockIndicatorUpsert(BaseModel):
     data: dict = Field(..., description="Indicator data")
 
 
-def generate_indicator_key(indicator_type: IndicatorType, params: list[int]) -> str:
-    """Generate standardized indicator key.
+def generate_indicator_key(
+    indicator_type: IndicatorType,
+    params: list[int],
+    timeframe: str = "D",
+) -> str:
+    """Generate standardized indicator key with timeframe.
 
     Args:
         indicator_type: Indicator type enum
         params: List of period parameters
+        timeframe: Timeframe code (D for daily, W for weekly)
 
     Returns:
-        str: Indicator key (e.g., RSI_14, MACD_12_26_9)
+        str: Indicator key (e.g., RSI_14_D, MACD_12_26_9_D)
 
     Examples:
-        RSI: generate_indicator_key(IndicatorType.RSI, [14]) -> "RSI_14"
-        SMA: generate_indicator_key(IndicatorType.SMA, [20]) -> "SMA_20"
-        KDJ: generate_indicator_key(IndicatorType.KDJ, [9, 3, 3]) -> "KDJ_9_3_3"
-        MACD: generate_indicator_key(IndicatorType.MACD, [12, 26, 9]) -> "MACD_12_26_9"
+        RSI: generate_indicator_key(IndicatorType.RSI, [14], "D") -> "RSI_14_D"
+        SMA: generate_indicator_key(IndicatorType.SMA, [20], "D") -> "SMA_20_D"
+        KDJ: generate_indicator_key(IndicatorType.KDJ, [9, 3, 3], "D") -> "KDJ_9_3_3_D"
+        MACD: generate_indicator_key(IndicatorType.MACD, [12, 26, 9], "D") -> "MACD_12_26_9_D"
     """
     type_str = indicator_type.value.upper()
     params_str = "_".join(str(p) for p in params)
-    return f"{type_str}_{params_str}" if params_str else type_str
+    if params_str:
+        return f"{type_str}_{params_str}_{timeframe}"
+    return f"{type_str}_{timeframe}"
 
 
-def parse_indicator_key(indicator_key: str) -> tuple[IndicatorType, list[int]]:
-    """Parse indicator key to extract type and parameters.
+def parse_indicator_key(indicator_key: str) -> tuple[IndicatorType, list[int], str]:
+    """Parse indicator key to extract type, parameters, and timeframe.
 
     Args:
-        indicator_key: Indicator key string (e.g., RSI_14, MACD_12_26_9)
+        indicator_key: Indicator key string (e.g., RSI_14_D, MACD_12_26_9_D)
 
     Returns:
-        tuple: (IndicatorType, list of parameters)
+        tuple: (IndicatorType, list of parameters, timeframe)
 
     Raises:
         ValueError: If indicator key format is invalid
@@ -108,6 +115,13 @@ def parse_indicator_key(indicator_key: str) -> tuple[IndicatorType, list[int]]:
     except ValueError:
         raise ValueError(f"Unknown indicator type: {type_str}")
 
+    # Last part should be timeframe (D or W)
+    timeframe = "D"
+    if len(parts) > 1 and parts[-1] in ("D", "W"):
+        timeframe = parts[-1]
+        # Remove timeframe from parts for parameter parsing
+        parts = parts[:-1]
+
     params = []
     for part in parts[1:]:
         try:
@@ -115,4 +129,4 @@ def parse_indicator_key(indicator_key: str) -> tuple[IndicatorType, list[int]]:
         except ValueError:
             raise ValueError(f"Invalid parameter in indicator key: {part}")
 
-    return indicator_type, params
+    return indicator_type, params, timeframe

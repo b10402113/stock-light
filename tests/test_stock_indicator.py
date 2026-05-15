@@ -33,36 +33,50 @@ class TestIndicatorKeyGeneration:
     """Tests for indicator key generation and parsing"""
 
     def test_generate_rsi_key(self):
-        """Test RSI indicator key generation"""
+        """Test RSI indicator key generation with default timeframe"""
         key = generate_indicator_key(IndicatorType.RSI, [14])
-        assert key == "RSI_14"
+        assert key == "RSI_14_D"
 
     def test_generate_sma_key(self):
-        """Test SMA indicator key generation"""
+        """Test SMA indicator key generation with default timeframe"""
         key = generate_indicator_key(IndicatorType.SMA, [20])
-        assert key == "SMA_20"
+        assert key == "SMA_20_D"
 
     def test_generate_kdj_key(self):
-        """Test KDJ indicator key generation"""
+        """Test KDJ indicator key generation with default timeframe"""
         key = generate_indicator_key(IndicatorType.KDJ, [9, 3, 3])
-        assert key == "KDJ_9_3_3"
+        assert key == "KDJ_9_3_3_D"
 
     def test_generate_macd_key(self):
-        """Test MACD indicator key generation"""
+        """Test MACD indicator key generation with default timeframe"""
         key = generate_indicator_key(IndicatorType.MACD, [12, 26, 9])
-        assert key == "MACD_12_26_9"
+        assert key == "MACD_12_26_9_D"
+
+    def test_generate_key_with_weekly_timeframe(self):
+        """Test indicator key generation with weekly timeframe"""
+        key = generate_indicator_key(IndicatorType.RSI, [14], "W")
+        assert key == "RSI_14_W"
 
     def test_parse_rsi_key(self):
         """Test parsing RSI indicator key"""
-        ind_type, params = parse_indicator_key("RSI_14")
+        ind_type, params, timeframe = parse_indicator_key("RSI_14_D")
         assert ind_type == IndicatorType.RSI
         assert params == [14]
+        assert timeframe == "D"
 
     def test_parse_macd_key(self):
         """Test parsing MACD indicator key"""
-        ind_type, params = parse_indicator_key("MACD_12_26_9")
+        ind_type, params, timeframe = parse_indicator_key("MACD_12_26_9_D")
         assert ind_type == IndicatorType.MACD
         assert params == [12, 26, 9]
+        assert timeframe == "D"
+
+    def test_parse_key_without_timeframe(self):
+        """Test parsing legacy indicator key without timeframe defaults to D"""
+        ind_type, params, timeframe = parse_indicator_key("RSI_14")
+        assert ind_type == IndicatorType.RSI
+        assert params == [14]
+        assert timeframe == "D"
 
     def test_parse_invalid_key(self):
         """Test parsing invalid indicator key raises error"""
@@ -219,26 +233,27 @@ class TestCalculateIndicatorsFromPrices:
 
         results = calculate_indicators_from_prices(closes, ohlcs)
 
-        assert "RSI_14" in results
-        assert "SMA_20" in results
-        assert "KDJ_9_3_3" in results
-        assert "MACD_12_26_9" in results
+        # Default indicators now have timeframe suffix
+        assert "RSI_14_D" in results
+        assert "SMA_20_D" in results
+        assert "KDJ_9_3_3_D" in results
+        assert "MACD_12_26_9_D" in results
 
     def test_calculate_specific_indicators(self):
         """Test calculating specific indicator keys"""
         closes = [Decimal(str(100 + i)) for i in range(40)]
-        indicator_keys = ["RSI_14", "SMA_20"]
+        indicator_keys = ["RSI_14_D", "SMA_20_D"]
 
         results = calculate_indicators_from_prices(closes, indicator_keys=indicator_keys)
 
-        assert "RSI_14" in results
-        assert "SMA_20" in results
-        assert "KDJ_9_3_3" not in results  # Not requested
+        assert "RSI_14_D" in results
+        assert "SMA_20_D" in results
+        assert "KDJ_9_3_3_D" not in results  # Not requested
 
     def test_calculate_insufficient_data(self):
         """Test calculation with insufficient data returns empty dict"""
         closes = [Decimal("100")]
-        indicator_keys = ["RSI_14"]
+        indicator_keys = ["RSI_14_D"]
 
         results = calculate_indicators_from_prices(closes, indicator_keys=indicator_keys)
 
@@ -594,8 +609,9 @@ class TestStockIndicatorService:
         # Get required indicator keys
         keys = await StockIndicatorService.get_required_indicator_keys(db_session, stock.id)
 
-        assert "RSI_14" in keys
-        assert "MACD_12_26_9" in keys
+        # Keys now include timeframe suffix
+        assert "RSI_14_D" in keys
+        assert "MACD_12_26_9_D" in keys
 
 
 class TestStockIndicatorModel:

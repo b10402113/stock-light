@@ -205,7 +205,7 @@ class TestDefaultWorkerSettings:
 
     def test_cron_jobs_configured(self):
         """Test that cron jobs are properly configured."""
-        assert len(DefaultWorkerSettings.cron_jobs) == 4
+        assert len(DefaultWorkerSettings.cron_jobs) == 5
 
         # Verify master task cron job runs every 5 minutes
         master_cron = DefaultWorkerSettings.cron_jobs[0]
@@ -215,6 +215,10 @@ class TestDefaultWorkerSettings:
         persist_cron = DefaultWorkerSettings.cron_jobs[1]
         assert persist_cron.minute == set(range(60))
 
+        # Verify indicator calculation cron job runs every 5 minutes
+        indicator_cron = DefaultWorkerSettings.cron_jobs[4]
+        assert indicator_cron.minute == set(range(0, 60, 5))
+
     def test_functions_registered(self):
         """Test that task functions are registered."""
         assert update_stock_prices_master in DefaultWorkerSettings.functions
@@ -223,6 +227,7 @@ class TestDefaultWorkerSettings:
             "persist_redis_to_database",
             "sync_active_stocks_to_redis",
             "process_scheduled_reminders",
+            "calculate_stock_indicators",
         ]
         actual_functions = [f.__name__ for f in DefaultWorkerSettings.functions]
         for expected in expected_functions:

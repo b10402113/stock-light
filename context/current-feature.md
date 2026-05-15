@@ -1,16 +1,48 @@
-# Current Feature
+# Current Feature: Indicator Data Updater
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-<!-- Add goals when starting a new feature -->
+- Create ARQ cron job `update_indicator_data` with configurable interval (default: 5 minutes)
+- Add `INDICATOR_UPDATE_INTERVAL_MINUTES`, `INDICATOR_BATCH_SIZE`, `INDICATOR_MAX_RETRIES` to config.py
+- Query stocks with active indicator subscriptions (returns `{stock_id}:{indicator_key}` combinations)
+- Implement Redis queue integration for batch distribution
+- Check `daily_prices` table for available data, fallback to yfinance API when insufficient
+- Calculate indicators using existing functions from `src/stocks/indicators.py`
+- Parse indicator key format: `{TYPE}_{PARAMS}_{TIMEFRAME}` (e.g., `RSI_14_D`, `MACD_12_26_9_D`)
+- Upsert results to `stock_indicator` table with BIGINT `updated_at` timestamp
+- Implement error handling with retry tracking and monitoring alerts
+- Optimize with batch queries, parallel calculations, and price data caching
 
 ## Notes
 
-<!-- Add notes when starting a new feature -->
+**Worker Architecture:**
+- Decoupled from subscription creation - runs independently on schedule
+- Focuses on preparing indicator data for stocks with active subscriptions
+- Batch processing enables efficient resource management
+
+**Indicator Key Standard:**
+- Format: `{INDICATOR_TYPE}_{PARAMETERS}_{TIMEFRAME}`
+- Examples: `RSI_14_D`, `SMA_20_D`, `KDJ_9_3_3_D`, `MACD_12_26_9_D`
+- Timeframe: `D` (daily) or `W` (weekly)
+
+**Data Fetching Strategy:**
+- Prioritize existing `daily_prices` data (avoid unnecessary API calls)
+- Fetch via yfinance only when data insufficient
+- Required periods: RSI/SMA need `period` days, KDJ needs `n` days, MACD needs `slow_period` days
+
+**JSONB Data Structures:**
+- RSI: `{"value": 70.5}`
+- SMA: `{"value": 150.25}`
+- KDJ: `{"k": 80, "d": 75, "j": 85}`
+- MACD: `{"macd": 0.5, "signal": 0.3, "histogram": 0.2}`
+
+**Database Rules:**
+- BIGINT timestamp for `updated_at` (never NULL)
+- Upsert for concurrent update safety
 
 ## History
 

@@ -212,29 +212,30 @@ def calculate_indicators_from_prices(
 
     # Calculate all default indicators if no specific keys provided
     if not indicator_keys:
+        timeframe = "D"  # Default timeframe
         # Default indicators
         if len(closes) >= 15:
             rsi = calculate_rsi(closes, 14)
             if rsi:
-                key = generate_indicator_key(IndicatorType.RSI, [14])
+                key = generate_indicator_key(IndicatorType.RSI, [14], timeframe)
                 results[key] = rsi.model_dump()
 
         if len(closes) >= 21:
             sma = calculate_sma(closes, 20)
             if sma:
-                key = generate_indicator_key(IndicatorType.SMA, [20])
+                key = generate_indicator_key(IndicatorType.SMA, [20], timeframe)
                 results[key] = sma.model_dump()
 
         if ohlcs and len(ohlcs) >= 9:
             kdj = calculate_kdj(ohlcs, 9, 3, 3)
             if kdj:
-                key = generate_indicator_key(IndicatorType.KDJ, [9, 3, 3])
+                key = generate_indicator_key(IndicatorType.KDJ, [9, 3, 3], timeframe)
                 results[key] = kdj.model_dump()
 
         if len(closes) >= 35:
             macd = calculate_macd(closes, 12, 26, 9)
             if macd:
-                key = generate_indicator_key(IndicatorType.MACD, [12, 26, 9])
+                key = generate_indicator_key(IndicatorType.MACD, [12, 26, 9], timeframe)
                 results[key] = macd.model_dump()
     else:
         # Calculate specific indicators
@@ -242,7 +243,7 @@ def calculate_indicators_from_prices(
 
         for key in indicator_keys:
             try:
-                ind_type, params = parse_indicator_key(key)
+                ind_type, params, timeframe = parse_indicator_key(key)
 
                 if ind_type == IndicatorType.RSI:
                     period = params[0] if params else 14

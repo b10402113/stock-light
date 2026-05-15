@@ -71,10 +71,10 @@ class DefaultWorkerSettings:
             minute=settings.parse_cron_minutes(settings.CRON_REMINDER_MINUTES),
             run_at_startup=False,
         ),
-        # Calculate stock indicators: run every 5 minutes
+        # Calculate stock indicators: schedule configurable via CRON_INDICATOR_MINUTES
         cron(
             calculate_stock_indicators,
-            minute=5,
+            minute=settings.parse_cron_minutes(settings.CRON_INDICATOR_MINUTES),
             run_at_startup=False,
         ),
     ]

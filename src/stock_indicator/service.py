@@ -312,10 +312,10 @@ class StockIndicatorService:
         }
 
         if ind_type in default_params:
-            return generate_indicator_key(ind_type, default_params[ind_type])
+            return generate_indicator_key(ind_type, default_params[ind_type], timeframe)
         elif ind_type in (IndicatorType.RSI, IndicatorType.SMA):
             # Use provided period or default
             params = [period] if period else [14] if ind_type == IndicatorType.RSI else [20]
-            return generate_indicator_key(ind_type, params)
+            return generate_indicator_key(ind_type, params, timeframe)
 
         return None
