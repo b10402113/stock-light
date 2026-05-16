@@ -31,10 +31,67 @@ All API responses follow a unified format:
 
 ### Error Response
 
+All error responses follow a unified format with HTTP status codes:
+
 ```json
 {
-  "code": 1001,
-  "message": "Error description",
+  "code": 400,
+  "msg": "Error description",
+  "data": null
+}
+```
+
+#### HTTP Status Codes
+
+| Status Code | Error Type | Description |
+|------------|------------|-------------|
+| 400 | Bad Request | Request parameter error |
+| 401 | Unauthorized | Not authenticated |
+| 403 | Forbidden | No permission |
+| 404 | Not Found | Resource does not exist |
+| 422 | Unprocessable Entity | Parameter validation failed |
+| 429 | Too Many Requests | Request too frequent |
+| 500 | Internal Server Error | Server internal error |
+
+#### Error Response Examples
+
+**400 Bad Request**
+```json
+{
+  "code": 400,
+  "msg": "Request parameter error",
+  "data": null
+}
+```
+
+**401 Unauthorized**
+```json
+{
+  "code": 401,
+  "msg": "Not authenticated",
+  "data": null
+}
+```
+
+**422 Validation Error**
+```json
+{
+  "code": 422,
+  "msg": "body.email: invalid email format; body.password: string too short",
+  "data": {
+    "errors": [
+      {"loc": ["body", "email"], "msg": "invalid email format"},
+      {"loc": ["body", "password"], "msg": "string too short"}
+    ]
+  }
+}
+```
+
+**500 Internal Server Error**
+```json
+{
+  "code": 500,
+  "msg": "Server internal error",
   "data": null
 }
 ```
@@ -53,6 +110,17 @@ All API responses follow a unified format:
 - Watchlist: @context/api/api-watchlist.md
 
 ## Changelog
+
+### v1.11.0 (2026-05-16)
+
+- Unified Error Response Handling
+- All error responses follow consistent JSON format: {"code": int, "msg": str, "data": any}
+- HTTP-level exception classes for each status code (400, 401, 403, 404, 422, 429, 500)
+- Global exception handlers for FastAPI built-in exceptions
+- RequestValidationError handler with detailed validation messages
+- HTTPException handler for standard FastAPI errors
+- Generic Exception handler with logging for unhandled errors
+- Comprehensive test coverage (11 tests)
 
 ### v1.10.0 (2026-05-10)
 

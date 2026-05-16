@@ -102,3 +102,63 @@ class BizException(Exception):
 
     def __repr__(self) -> str:
         return f"BizException(code={self.error_code}, message={self.message})"
+
+
+# HTTP-level exception classes for unified error response
+class HTTPException(Exception):
+    """Base HTTP exception with status code"""
+
+    def __init__(self, status_code: int, message: str, data: any = None):
+        self.status_code = status_code
+        self.message = message
+        self.data = data
+        super().__init__(self.message)
+
+
+class BadRequestError(HTTPException):
+    """400 Bad Request"""
+
+    def __init__(self, message: str = "Request parameter error", data: any = None):
+        super().__init__(400, message, data)
+
+
+class UnauthorizedError(HTTPException):
+    """401 Unauthorized"""
+
+    def __init__(self, message: str = "Not authenticated", data: any = None):
+        super().__init__(401, message, data)
+
+
+class ForbiddenError(HTTPException):
+    """403 Forbidden"""
+
+    def __init__(self, message: str = "No permission", data: any = None):
+        super().__init__(403, message, data)
+
+
+class NotFoundError(HTTPException):
+    """404 Not Found"""
+
+    def __init__(self, message: str = "Resource does not exist", data: any = None):
+        super().__init__(404, message, data)
+
+
+class ValidationError(HTTPException):
+    """422 Unprocessable Entity"""
+
+    def __init__(self, message: str = "Parameter validation failed", data: any = None):
+        super().__init__(422, message, data)
+
+
+class RateLimitError(HTTPException):
+    """429 Too Many Requests"""
+
+    def __init__(self, message: str = "Request too frequent", data: any = None):
+        super().__init__(429, message, data)
+
+
+class InternalServerError(HTTPException):
+    """500 Internal Server Error"""
+
+    def __init__(self, message: str = "Server internal error", data: any = None):
+        super().__init__(500, message, data)
