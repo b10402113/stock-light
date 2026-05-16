@@ -23,6 +23,7 @@ console = get_console()
 REDIS_INDICATOR_RETRY_PREFIX = "indicator:retry:"
 REDIS_INDICATOR_FAILED_KEY = "indicator:failed"
 REDIS_INDICATOR_ERROR_PREFIX = "indicator:error:"  # Store error reason
+REDIS_INDICATOR_UPDATED_KEY = "indicator:updated:last_minute"  # Track updated stocks
 
 
 async def update_indicator(ctx: dict[str, Any]) -> dict[str, Any]:
@@ -56,6 +57,7 @@ async def update_indicator(ctx: dict[str, Any]) -> dict[str, Any]:
         "yfinance_fetches": 0,
         "errors": [],
         "success": False,
+        "updated_stocks": [],
     }
 
     try:
@@ -197,6 +199,11 @@ async def update_indicator(ctx: dict[str, Any]) -> dict[str, Any]:
                                 f"Stock [stock]{sid}[/stock]: calculated [success]{len(calculated)}[/success] indicators, upserted [job]{count}[/job]"
                             )
 
+                            # Track updated stock in Redis for subscription check
+                            await redis_pool.sadd(REDIS_INDICATOR_UPDATED_KEY, str(sid))
+                            await redis_pool.expire(REDIS_INDICATOR_UPDATED_KEY, 120)
+                            result["updated_stocks"].append(sid)
+
                             # Clear retry count and error reason on success
                             await redis_pool.delete(f"{REDIS_INDICATOR_RETRY_PREFIX}{sid}")
                             await redis_pool.delete(f"{REDIS_INDICATOR_ERROR_PREFIX}{sid}")
@@ -221,6 +228,7 @@ async def update_indicator(ctx: dict[str, Any]) -> dict[str, Any]:
         table.add_column("Count", justify="right")
         table.add_row("Stocks Processed", str(result["stocks_processed"]))
         table.add_row("Indicators Calculated", str(result["indicators_calculated"]))
+        table.add_row("Stocks Updated", str(len(result["updated_stocks"])))
         table.add_row("YFinance Fetches", str(result["yfinance_fetches"]))
         table.add_row("Errors", str(len(result["errors"])))
         console.print(table)
@@ -228,6 +236,7 @@ async def update_indicator(ctx: dict[str, Any]) -> dict[str, Any]:
         logger.info(
             f"[success]update_indicator completed[/success]: processed [stock]{result['stocks_processed']}[/stock] stocks, "
             f"calculated [job]{result['indicators_calculated']}[/job] indicators, "
+            f"updated [stock]{len(result['updated_stocks'])}[/stock] stocks for subscription check, "
             f"yfinance fetches: [time]{result['yfinance_fetches']}[/time]"
         )
 

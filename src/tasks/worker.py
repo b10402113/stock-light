@@ -8,6 +8,7 @@ from arq import cron
 from src.config import settings
 from src.tasks.config import redis_settings
 from src.tasks.jobs import (
+    check_indicator_subscriptions,
     fetch_missing_daily_prices,
     persist_redis_to_database,
     prepare_subscription_data,
@@ -35,6 +36,7 @@ class DefaultWorkerSettings:
         fetch_missing_daily_prices,
         prepare_subscription_data,
         update_indicator,
+        check_indicator_subscriptions,
     ]
     on_startup = startup
     on_shutdown = shutdown
@@ -77,7 +79,13 @@ class DefaultWorkerSettings:
             minute=settings.parse_cron_minutes(settings.CRON_INDICATOR_MINUTES),
             run_at_startup=False,
         ),
-        
+        # Check indicator subscriptions: runs every minute
+        cron(
+            check_indicator_subscriptions,
+            minute=set(range(0, 60)),  # Every minute
+            run_at_startup=False,
+        ),
+
     ]
 
 

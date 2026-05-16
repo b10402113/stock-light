@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     INDICATOR_BATCH_SIZE: int = 50  # stocks per batch
     INDICATOR_MAX_RETRIES: int = 3  # max retries for failed stocks
 
+    # Subscription Check
+    SUBSCRIPTION_CHECK_BATCH_SIZE: int = 100  # subscriptions per batch
+    SUBSCRIPTION_COOLDOWN_HOURS: int = 1  # cooldown period after notification
+    SUBSCRIPTION_NOTIFICATION_TIMEOUT: int = 30  # seconds
+
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
