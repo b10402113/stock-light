@@ -1,50 +1,16 @@
-# Current Feature: Unified Error Response Handling
+# Current Feature
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Implement unified error response format with code, msg, and data fields
-- Create custom exception classes for each error code (400, 401, 403, 404, 422, 429, 500)
-- Implement global exception handlers in FastAPI
-- Override default FastAPI exception handlers for consistent formatting
-- Add logging for internal server errors
+<!-- Add goals when starting a new feature -->
 
 ## Notes
 
-- All error responses must follow the format: `{"code": int, "msg": str, "data": any}`
-- Need to handle both custom exceptions and built-in FastAPI/Pydantic exceptions
-- Register exception handlers in `src/main.py`
-- Create exception classes in `src/exceptions.py`
-- Create ErrorResponse Pydantic schema
-
-## Implementation Details
-
-### Error Code Definitions
-- 400: Bad Request - Request parameter error
-- 401: Unauthorized - Not authenticated
-- 403: Forbidden - No permission
-- 404: Not Found - Resource does not exist
-- 422: Unprocessable Entity - Parameter validation failed
-- 429: Too Many Requests - Request too frequent
-- 500: Internal Server Error - Server internal error
-
-### Exception Classes to Create
-- `BadRequestError` (400)
-- `UnauthorizedError` (401)
-- `ForbiddenError` (403)
-- `NotFoundError` (404)
-- `ValidationError` (422)
-- `RateLimitError` (429)
-- `InternalServerError` (500)
-
-## References
-
-- @src/exceptions.py
-- @src/main.py
-- @docs/rules/api-spec.md
+<!-- Add notes when starting a new feature -->
 
 ## History
 
@@ -77,3 +43,12 @@ In Progress
   - Fixed bug: cron job minute parameter must be set, not range object
   - Verified working: jobs executed successfully, notifications sent
   - Benefits: High-performance subscription check (only updated stocks), immediate notifications
+- 2026-05-16: Unified Error Response Handling Implementation
+  - Created HTTP-level exception classes (BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, RateLimitError, InternalServerError)
+  - Implemented global exception handlers for each HTTP status code
+  - Override RequestValidationError for consistent validation error messages
+  - Override HTTPException for standard FastAPI errors
+  - Add generic Exception handler with logging for unhandled errors
+  - Created comprehensive test suite (11 tests, all passing)
+  - Updated API documentation with unified error response format and examples
+  - Benefits: Consistent error format across all endpoints, better error messages, easier debugging
