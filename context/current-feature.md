@@ -1,23 +1,16 @@
-# Indicator Update Cron Job Refactor
+# Current Feature
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- Remove existing `calculate_stock_indicators` job and its cron entry from worker
-- Create new `update_indicator` cron job that runs every minute
-- Query `indicator_subscriptions` to get required indicators and calculate them
-- Upsert calculated indicators to `stock_indicator` table
-- Update `CRON_INDICATOR_MINUTES` config to `*/1`
+<!-- Add goals when starting a new feature -->
 
 ## Notes
 
-- Keep existing helper functions: `StockIndicatorService.get_required_indicator_keys()`, yfinance fallback
-- Use existing calculator from `src/stock_indicator/calculator.py`
-- Maintain Redis retry tracking for failed stocks
-- Parse `condition_group` JSONB to extract indicator_type, period, timeframe
+<!-- Add notes when starting a new feature -->
 
 ## History
 
@@ -31,3 +24,10 @@ In Progress
   - Updated all 106 subscription-related tests to use condition_group format
   - Updated API documentation with new schema structure
   - Benefits: One format for all conditions (1-N), cleaner code, consistent API
+- 2026-05-16: Indicator Update Cron Job Refactor
+  - Renamed calculate_stock_indicators to update_indicator
+  - Simplified job to run every minute (CRON_INDICATOR_MINUTES=*/1)
+  - Removed stock_id parameter, job now queries all subscriptions automatically
+  - Updated worker imports and cron job registration
+  - Updated test files to use new function name
+  - Benefits: Cleaner code, automatic processing of all subscribed stocks
