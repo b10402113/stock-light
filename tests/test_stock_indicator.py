@@ -506,10 +506,12 @@ class TestStockIndicatorService:
             title="RSI Alert",
             message="RSI trigger",
             signal_type="buy",
-            timeframe="D",
-            indicator_type="rsi",
-            operator=">",
-            target_value=Decimal("70"),
+            condition_group={
+                "logic": "and",
+                "conditions": [
+                    {"indicator_type": "rsi", "operator": ">", "target_value": "70", "timeframe": "D", "period": 14}
+                ],
+            },
             is_active=True,
         )
         sub2 = IndicatorSubscription(
@@ -518,10 +520,12 @@ class TestStockIndicatorService:
             title="MACD Alert",
             message="MACD trigger",
             signal_type="buy",
-            timeframe="D",
-            indicator_type="macd",
-            operator=">",
-            target_value=Decimal("0"),
+            condition_group={
+                "logic": "and",
+                "conditions": [
+                    {"indicator_type": "macd", "operator": ">", "target_value": "0", "timeframe": "D"}
+                ],
+            },
             is_active=True,
         )
         db_session.add_all([sub1, sub2])
@@ -584,11 +588,12 @@ class TestStockIndicatorService:
             title="RSI 14 Alert",
             message="RSI trigger",
             signal_type="buy",
-            timeframe="D",
-            indicator_type="rsi",
-            operator=">",
-            target_value=Decimal("70"),
-            period=14,
+            condition_group={
+                "logic": "and",
+                "conditions": [
+                    {"indicator_type": "rsi", "operator": ">", "target_value": "70", "timeframe": "D", "period": 14}
+                ],
+            },
             is_active=True,
         )
         sub_macd = IndicatorSubscription(
@@ -597,10 +602,12 @@ class TestStockIndicatorService:
             title="MACD Alert",
             message="MACD trigger",
             signal_type="buy",
-            timeframe="D",
-            indicator_type="macd",
-            operator=">",
-            target_value=Decimal("0"),
+            condition_group={
+                "logic": "and",
+                "conditions": [
+                    {"indicator_type": "macd", "operator": ">", "target_value": "0", "timeframe": "D"}
+                ],
+            },
             is_active=True,
         )
         db_session.add_all([sub_rsi, sub_macd])

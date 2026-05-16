@@ -42,10 +42,12 @@ Get all indicator subscriptions for the authenticated user with keyset paginatio
         "title": "RSI Buy Signal",
         "message": "2330 RSI below 30, consider buying",
         "signal_type": "buy",
-        "indicator_type": "rsi",
-        "operator": "<",
-        "target_value": "30.0000",
-        "compound_condition": null,
+        "condition_group": {
+          "logic": "and",
+          "conditions": [
+            {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14}
+          ]
+        },
         "is_triggered": false,
         "cooldown_end_at": null,
         "is_active": true,
@@ -69,23 +71,20 @@ Get all indicator subscriptions for the authenticated user with keyset paginatio
 
 **Subscription Schema**:
 
-| Field              | Type             | Description                              |
-| ------------------ | ---------------- | ---------------------------------------- |
-| id                 | integer          | Subscription ID                          |
-| stock              | object           | Stock details (id, symbol, name, price)  |
-| subscription_type  | string           | Always "indicator"                       |
-| title              | string           | Alert title (max 50 chars)               |
-| message            | string           | Alert message content (max 200 chars)    |
-| signal_type        | string           | Signal type: "buy" or "sell"             |
-| indicator_type     | string           | Indicator type: rsi, macd, kd, price     |
-| operator           | string           | Comparison: >, <, >=, <=, ==, !=         |
-| target_value       | decimal          | Target threshold value                   |
-| compound_condition | object \| null   | Complex AND/OR conditions                |
-| is_triggered       | boolean          | Whether condition was triggered          |
-| cooldown_end_at    | datetime \| null | Cooldown period end time                 |
-| is_active          | boolean          | Subscription active status               |
-| created_at         | datetime         | Creation timestamp                       |
-| updated_at         | datetime         | Last update timestamp                    |
+| Field             | Type             | Description                              |
+| ----------------- | ---------------- | ---------------------------------------- |
+| id                | integer          | Subscription ID                          |
+| stock             | object           | Stock details (id, symbol, name, price)  |
+| subscription_type | string           | Always "indicator"                       |
+| title             | string           | Alert title (max 50 chars)               |
+| message           | string           | Alert message content (max 200 chars)    |
+| signal_type       | string           | Signal type: "buy" or "sell"             |
+| condition_group   | object           | Condition group with 1-10 conditions     |
+| is_triggered      | boolean          | Whether condition was triggered          |
+| cooldown_end_at   | datetime \| null | Cooldown period end time                 |
+| is_active         | boolean          | Subscription active status               |
+| created_at        | datetime         | Creation timestamp                       |
+| updated_at        | datetime         | Last update timestamp                    |
 
 **Stock Schema**:
 
@@ -107,7 +106,7 @@ Create a new indicator subscription. Quota is validated against the user's Plan 
 
 **Authentication**: Required (JWT Bearer token)
 
-**Automatic Data Preparation**: When creating a subscription for an indicator-based condition (RSI, MACD, KD), the system automatically checks and prepares necessary data:
+**Automatic Data Preparation**: When creating a subscription for an indicator-based condition (RSI, SMA, MACD, KD), the system automatically checks and prepares necessary data:
 
 1. **Redis Active Status Check**: Verifies if the stock is in the Redis active monitoring set
 2. **Historical Data Check**: Checks if at least 30 days of historical prices exist (required for indicator calculation)
@@ -126,25 +125,41 @@ Create a new indicator subscription. Quota is validated against the user's Plan 
   "title": "RSI Buy Signal",
   "message": "2330 RSI below 30, consider buying",
   "signal_type": "buy",
-  "indicator_type": "rsi",
-  "operator": "<",
-  "target_value": "30.0",
-  "compound_condition": null
+  "condition_group": {
+    "logic": "and",
+    "conditions": [
+      {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14}
+    ]
+  }
 }
 ```
 
 **Request Schema**:
 
-| Field              | Type           | Required | Default | Constraints                 | Description                 |
-| ------------------ | -------------- | -------- | ------- | --------------------------- | --------------------------- |
-| stock_id           | integer        | Yes      | -       | Must reference active stock | Target stock ID             |
-| title              | string         | No       | ""      | max_length: 50              | Alert title                 |
-| message            | string         | No       | ""      | max_length: 200             | Alert message content       |
-| signal_type        | string         | No       | "buy"   | Enum: buy, sell             | Signal type                 |
-| indicator_type     | string         | Yes      | -       | Enum: rsi, macd, kd, price  | Type of indicator           |
-| operator           | string         | Yes      | -       | Enum: >, <, >=, <=, ==, !=  | Comparison operator         |
-| target_value       | decimal        | Yes      | -       | >= 0                        | Target threshold value      |
-| compound_condition | object \| null | No       | null    | -                           | Complex conditions (AND/OR) |
+| Field           | Type    | Required | Default | Constraints                    | Description               |
+| --------------- | ------- | -------- | ------- | ------------------------------ | ------------------------- |
+| stock_id        | integer | Yes      | -       | Must reference active stock    | Target stock ID           |
+| title           | string  | No       | ""      | max_length: 50                 | Alert title               |
+| message         | string  | No       | ""      | max_length: 200                | Alert message content     |
+| signal_type     | string  | No       | "buy"   | Enum: buy, sell                | Signal type               |
+| condition_group | object  | Yes      | -       | 1-10 conditions                | Condition group (AND/OR)  |
+
+**Condition Group Schema**:
+
+| Field      | Type             | Required | Description                  |
+| ---------- | ---------------- | -------- | ---------------------------- |
+| logic      | string           | Yes      | "and" or "or"                |
+| conditions | array[Condition] | Yes      | List of 1-10 conditions      |
+
+**Condition Schema**:
+
+| Field          | Type    | Required | Default | Description                              |
+| -------------- | ------- | -------- | ------- | ---------------------------------------- |
+| indicator_type | string  | Yes      | -       | Indicator: rsi, sma, macd, kd, price     |
+| operator       | string  | Yes      | -       | Operator: >, <, >=, <=, ==, !=           |
+| target_value   | decimal | Yes      | -       | Target threshold (>= 0)                  |
+| timeframe      | string  | No       | "D"     | Timeframe: D (daily), W (weekly)         |
+| period         | integer | No       | -       | Period for RSI/SMA only (5-200)          |
 
 **Signal Types**:
 
@@ -155,12 +170,13 @@ Create a new indicator subscription. Quota is validated against the user's Plan 
 
 **Indicator Types**:
 
-| Value | Description                           |
-| ----- | ------------------------------------- |
-| rsi   | Relative Strength Index               |
-| macd  | Moving Average Convergence Divergence |
-| kd    | Stochastic Oscillator                 |
-| price | Stock price                           |
+| Value  | Description                           | Period Support |
+| ------ | ------------------------------------- | -------------- |
+| rsi    | Relative Strength Index               | Optional (5-200, default: 14) |
+| sma    | Simple Moving Average                 | Optional (5-200, default: 20) |
+| macd   | Moving Average Convergence Divergence | Fixed (12/26/9) |
+| kd     | Stochastic Oscillator                 | Fixed (9/3/3) |
+| price  | Stock price                           | N/A            |
 
 **Operators**:
 
@@ -173,32 +189,38 @@ Create a new indicator subscription. Quota is validated against the user's Plan 
 | ==    | Equal to              |
 | !=    | Not equal to          |
 
-**Compound Condition Schema**:
-
-Compound conditions allow combining multiple indicator conditions with AND/OR logic.
-
-| Field      | Type            | Required | Description                        |
-| ---------- | --------------- | -------- | ---------------------------------- |
-| logic      | string          | Yes      | "and" or "or"                      |
-| conditions | array[Condition]| Yes      | List of 1-10 conditions            |
-
-**Condition Schema**:
-
-| Field          | Type    | Required | Description                              |
-| -------------- | ------- | -------- | ---------------------------------------- |
-| indicator_type | string  | Yes      | Indicator: rsi, macd, kd, price          |
-| operator       | string  | Yes      | Operator: >, <, >=, <=, ==, !=           |
-| target_value   | decimal | Yes      | Target threshold (>= 0)                  |
-
-**Example**:
+**Example - Multiple Conditions (AND logic)**:
 
 ```json
 {
-  "compound_condition": {
+  "stock_id": 1,
+  "title": "Complex Buy Signal",
+  "message": "Price > 500 AND RSI < 30 AND MACD > 0",
+  "signal_type": "buy",
+  "condition_group": {
     "logic": "and",
     "conditions": [
-      {"indicator_type": "rsi", "operator": "<", "target_value": "30"},
-      {"indicator_type": "macd", "operator": ">", "target_value": "0"}
+      {"indicator_type": "price", "operator": ">", "target_value": "500", "timeframe": "D"},
+      {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
+      {"indicator_type": "macd", "operator": ">", "target_value": "0", "timeframe": "D"}
+    ]
+  }
+}
+```
+
+**Example - OR Logic**:
+
+```json
+{
+  "stock_id": 1,
+  "title": "Either RSI Extreme",
+  "message": "Trigger when RSI < 30 OR RSI > 70",
+  "signal_type": "sell",
+  "condition_group": {
+    "logic": "or",
+    "conditions": [
+      {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
+      {"indicator_type": "rsi", "operator": ">", "target_value": "70", "timeframe": "D", "period": 14}
     ]
   }
 }
@@ -227,10 +249,12 @@ Compound conditions allow combining multiple indicator conditions with AND/OR lo
     "title": "RSI Buy Signal",
     "message": "2330 RSI below 30, consider buying",
     "signal_type": "buy",
-    "indicator_type": "rsi",
-    "operator": "<",
-    "target_value": "30.0000",
-    "compound_condition": null,
+    "condition_group": {
+      "logic": "and",
+      "conditions": [
+        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14}
+      ]
+    },
     "is_triggered": false,
     "cooldown_end_at": null,
     "is_active": true,
@@ -245,31 +269,9 @@ Compound conditions allow combining multiple indicator conditions with AND/OR lo
 | Status | Message                               |
 | ------ | ------------------------------------- |
 | 400    | Stock not found or inactive: {id}     |
-| 400    | Duplicate subscription already exists |
 | 403    | Subscription quota exceeded: used X/Y |
 | 409    | Subscription already exists           |
-
-**Data Preparation Flow**:
-
-```
-Subscription Creation
-    ↓
-Extract Indicator Types
-    ↓
-Check Redis Active Status ──→ Not Active ──→ Trigger Data Preparation
-    ↓ Active                                      ↓
-Check Historical Prices (< 30 days) ──→ Missing ──→ Trigger Data Preparation
-    ↓ ≥ 30 days                                   ↓
-Create Subscription                      Enqueue ARQ Job: prepare_subscription_data
-                                             ↓
-                                         Add to Redis Active Set
-                                             ↓
-                                         Fetch Current Price → Update Redis
-                                             ↓
-                                         Fetch 100 Days → Save to Database
-```
-
-The data preparation job runs asynchronously and does not block the subscription creation response. If the stock already has sufficient data, no preparation job is triggered.
+| 422    | Validation error (invalid condition)  |
 
 ---
 
@@ -306,10 +308,12 @@ Get a single subscription by ID with enriched stock details.
     "title": "RSI Buy Signal",
     "message": "2330 RSI below 30, consider buying",
     "signal_type": "buy",
-    "indicator_type": "rsi",
-    "operator": "<",
-    "target_value": "30.0000",
-    "compound_condition": null,
+    "condition_group": {
+      "logic": "and",
+      "conditions": [
+        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14}
+      ]
+    },
     "is_triggered": false,
     "cooldown_end_at": null,
     "is_active": true,
@@ -329,7 +333,7 @@ Get a single subscription by ID with enriched stock details.
 
 ### Update Subscription
 
-Update subscription title, message, signal_type, indicator type, operator, target value, or active status.
+Update subscription title, message, signal_type, condition_group, or active status.
 
 **Endpoint**: `PATCH /subscriptions/{subscription_id}`
 
@@ -348,25 +352,25 @@ Update subscription title, message, signal_type, indicator type, operator, targe
   "title": "Updated Title",
   "message": "Updated message",
   "signal_type": "sell",
-  "indicator_type": "price",
-  "operator": ">",
-  "target_value": "700.0",
+  "condition_group": {
+    "logic": "and",
+    "conditions": [
+      {"indicator_type": "price", "operator": ">", "target_value": "700", "timeframe": "D"}
+    ]
+  },
   "is_active": false
 }
 ```
 
 **Request Schema**:
 
-| Field              | Type            | Required | Constraints                | Description         |
-| ------------------ | --------------- | -------- | -------------------------- | ------------------- |
-| title              | string \| null  | No       | max_length: 50             | Alert title         |
-| message            | string \| null  | No       | max_length: 200            | Alert message       |
-| signal_type        | string \| null  | No       | Enum: buy, sell            | Signal type         |
-| indicator_type     | string \| null  | No       | Enum: rsi, macd, kd, price | Type of indicator   |
-| operator           | string \| null  | No       | Enum: >, <, >=, <=, ==, != | Comparison operator |
-| target_value       | decimal \| null | No       | >= 0                       | Target value        |
-| compound_condition | object \| null  | No       | -                          | Complex conditions  |
-| is_active          | boolean \| null | No       | -                          | Active status       |
+| Field           | Type            | Required | Constraints                | Description         |
+| --------------- | --------------- | -------- | -------------------------- | ------------------- |
+| title           | string \| null  | No       | max_length: 50             | Alert title         |
+| message         | string \| null  | No       | max_length: 200            | Alert message       |
+| signal_type     | string \| null  | No       | Enum: buy, sell            | Signal type         |
+| condition_group | object \| null  | No       | 1-10 conditions            | Condition group     |
+| is_active       | boolean \| null | No       | -                          | Active status       |
 
 **Response** (200 OK):
 
@@ -387,10 +391,12 @@ Update subscription title, message, signal_type, indicator type, operator, targe
     "title": "Updated Title",
     "message": "Updated message",
     "signal_type": "sell",
-    "indicator_type": "price",
-    "operator": ">",
-    "target_value": "700.0000",
-    "compound_condition": null,
+    "condition_group": {
+      "logic": "and",
+      "conditions": [
+        {"indicator_type": "price", "operator": ">", "target_value": "700", "timeframe": "D"}
+      ]
+    },
     "is_triggered": false,
     "cooldown_end_at": null,
     "is_active": false,
@@ -441,10 +447,12 @@ Soft delete a subscription.
     "title": "RSI Buy Signal",
     "message": "2330 RSI below 30",
     "signal_type": "buy",
-    "indicator_type": "rsi",
-    "operator": "<",
-    "target_value": "30.0000",
-    "compound_condition": null,
+    "condition_group": {
+      "logic": "and",
+      "conditions": [
+        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14}
+      ]
+    },
     "is_triggered": false,
     "cooldown_end_at": null,
     "is_active": true,
@@ -464,16 +472,101 @@ Soft delete a subscription.
 
 ---
 
+### Get Indicator Config
+
+Get indicator field configuration for frontend form generation.
+
+**Endpoint**: `GET /subscriptions/indicators/config`
+
+**Authentication**: Required (JWT Bearer token)
+
+**Response** (200 OK):
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "indicators": {
+      "rsi": {
+        "label": "RSI (Relative Strength Index)",
+        "timeframe": {
+          "required": true,
+          "default": "D",
+          "options": ["D", "W"]
+        },
+        "period": {
+          "required": false,
+          "default": 14,
+          "min": 5,
+          "max": 50
+        },
+        "operators": [">", "<", ">=", "<=", "==", "!="]
+      },
+      "sma": {
+        "label": "SMA (Simple Moving Average)",
+        "timeframe": {
+          "required": true,
+          "default": "D",
+          "options": ["D", "W"]
+        },
+        "period": {
+          "required": false,
+          "default": 20,
+          "min": 5,
+          "max": 200
+        },
+        "operators": [">", "<", ">=", "<=", "==", "!="]
+      },
+      "macd": {
+        "label": "MACD",
+        "timeframe": {
+          "required": true,
+          "default": "D",
+          "options": ["D", "W"]
+        },
+        "period": null,
+        "operators": [">", "<", ">=", "<=", "==", "!="],
+        "note": "Fixed periods: 12/26/9"
+      },
+      "kd": {
+        "label": "KD (Stochastic Oscillator)",
+        "timeframe": {
+          "required": true,
+          "default": "D",
+          "options": ["D", "W"]
+        },
+        "period": null,
+        "operators": [">", "<", ">=", "<=", "==", "!="],
+        "note": "Fixed period: 9"
+      },
+      "price": {
+        "label": "Price",
+        "timeframe": {
+          "required": true,
+          "default": "D",
+          "options": ["D", "W"]
+        },
+        "period": null,
+        "operators": [">", "<", ">=", "<=", "==", "!="]
+      }
+    }
+  }
+}
+```
+
+---
+
 ### Quota Limits by Plan Level
 
 Subscription quota is validated against the user's active Plan level:
 
 | Level | Name    | Max Subscriptions | Max Conditions per Alert |
 | ----- | ------- | ----------------- | ------------------------ |
-| 1     | Regular | 10                | 1                        |
-| 2     | Pro     | 50                | 3                        |
-| 3     | Pro Max | 100               | Unlimited                |
-| 4     | Admin   | Unlimited (-1)     | Unlimited                |
+| 1     | Regular | 10                | 10                       |
+| 2     | Pro     | 50                | 10                       |
+| 3     | Pro Max | 100               | 10                       |
+| 4     | Admin   | Unlimited (-1)    | 10                       |
 
 ---
 

@@ -1,16 +1,50 @@
-# Current Feature
+# Current Feature: Indicator Subscription Simplification
 
 ## Status
 
-Not Started
+Complete
 
 ## Goals
 
-<!-- Add goals when starting a new feature -->
+- Create Alembic migration to remove nullable columns (indicator_type, operator, target_value) ✅
+- Migrate existing single-condition subscriptions to compound_condition format ✅
+- Make compound_condition required with CHECK constraint validation ✅
+- Drop `uix_user_stock_single_condition` index, create new unique index on (user_id, stock_id, compound_condition) ✅
+- Update model.py - remove columns, change compound_condition to required ✅
+- Update schema.py - simplify schemas, rename compound_condition to condition_group ✅
+- Update service.py - remove dual-mode handling logic ✅
+- Update router.py - simplify validation ✅
+- Update worker/indicator_jobs.py - extract conditions uniformly ✅
+- Update all tests to use condition_group format ✅
+- Run full test suite to verify ✅
 
 ## Notes
 
-<!-- Add notes when starting a new feature -->
+**Data Migration Pattern:**
+- Single condition → wrapped in compound_condition: `{"logic": "and", "conditions": [{"indicator_type": "rsi", "operator": ">", "target_value": 70, "timeframe": "D", "period": 14}]}`
+
+**Naming Convention:**
+- Rename `compound_condition` → `condition_group` (semantic: always used, not "compound")
+
+**Benefits:**
+- One format for all conditions (1~N)
+- Cleaner code - no branching for single vs compound
+- Consistent API structure
+
+## History
+
+- 2026-05-16: Indicator Subscription Simplification
+  - Created Alembic migration to remove nullable columns and convert data
+  - Removed indicator_type, operator, target_value, timeframe, period from model
+  - Made condition_group required with CHECK constraint (1-10 conditions, logic in ['and', 'or'])
+  - Renamed compound_condition to condition_group in all schemas
+  - Simplified IndicatorSubscriptionBase/Create/Update/Response schemas
+  - Removed check_duplicate method (handled by DB unique constraint)
+  - Removed dual-mode handling in service.create/update/enrich_subscription_with_stock
+  - Updated StockIndicatorService.get_required_indicator_keys to only use condition_group
+  - Updated 106 subscription-related tests to use condition_group format
+  - Updated API documentation in api-subscription.md
+  - All subscription tests passing
 
 ## History
 

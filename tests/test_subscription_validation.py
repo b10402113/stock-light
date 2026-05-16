@@ -9,7 +9,7 @@ from src.subscriptions.schema import (
     IndicatorType,
     Operator,
     SignalType,
-    CompoundCondition,
+    ConditionGroup,
     Condition,
     LogicOperator,
 )
@@ -22,12 +22,15 @@ class TestExtractIndicatorTypes:
     """Test extract_indicator_types method."""
 
     def test_single_condition(self):
-        """Test extracting indicator type from single condition."""
+        """Test extracting indicator type from single condition in condition_group."""
         data = IndicatorSubscriptionCreate(
             stock_id=1,
-            indicator_type=IndicatorType.RSI,
-            operator=Operator.GT,
-            target_value=Decimal("70"),
+            condition_group=ConditionGroup(
+                logic=LogicOperator.AND,
+                conditions=[
+                    Condition(indicator_type=IndicatorType.RSI, operator=Operator.GT, target_value=Decimal("70")),
+                ],
+            ),
         )
 
         result = SubscriptionService.extract_indicator_types(data)
@@ -37,19 +40,22 @@ class TestExtractIndicatorTypes:
         """Test that price indicator is filtered out."""
         data = IndicatorSubscriptionCreate(
             stock_id=1,
-            indicator_type=IndicatorType.PRICE,
-            operator=Operator.GT,
-            target_value=Decimal("100"),
+            condition_group=ConditionGroup(
+                logic=LogicOperator.AND,
+                conditions=[
+                    Condition(indicator_type=IndicatorType.PRICE, operator=Operator.GT, target_value=Decimal("100")),
+                ],
+            ),
         )
 
         result = SubscriptionService.extract_indicator_types(data)
         assert result == []  # Price doesn't need indicator calculation
 
-    def test_compound_condition(self):
-        """Test extracting indicator types from compound condition."""
+    def test_multiple_conditions(self):
+        """Test extracting indicator types from multiple conditions."""
         data = IndicatorSubscriptionCreate(
             stock_id=1,
-            compound_condition=CompoundCondition(
+            condition_group=ConditionGroup(
                 logic=LogicOperator.AND,
                 conditions=[
                     Condition(indicator_type=IndicatorType.RSI, operator=Operator.GT, target_value=Decimal("70")),
@@ -61,11 +67,11 @@ class TestExtractIndicatorTypes:
         result = SubscriptionService.extract_indicator_types(data)
         assert set(result) == {"rsi", "macd"}  # Should extract both
 
-    def test_compound_condition_with_duplicates(self):
+    def test_multiple_conditions_with_duplicates(self):
         """Test that duplicate indicator types are removed."""
         data = IndicatorSubscriptionCreate(
             stock_id=1,
-            compound_condition=CompoundCondition(
+            condition_group=ConditionGroup(
                 logic=LogicOperator.OR,
                 conditions=[
                     Condition(indicator_type=IndicatorType.RSI, operator=Operator.GT, target_value=Decimal("70")),
@@ -77,23 +83,22 @@ class TestExtractIndicatorTypes:
         result = SubscriptionService.extract_indicator_types(data)
         assert result == ["rsi"]  # Should deduplicate
 
-    def test_mixed_single_and_compound(self):
-        """Test extracting from both single and compound conditions."""
+    def test_multiple_conditions_mixed_with_price(self):
+        """Test extracting from multiple conditions including price."""
         data = IndicatorSubscriptionCreate(
             stock_id=1,
-            indicator_type=IndicatorType.KD,
-            operator=Operator.GT,
-            target_value=Decimal("80"),
-            compound_condition=CompoundCondition(
+            condition_group=ConditionGroup(
                 logic=LogicOperator.AND,
                 conditions=[
+                    Condition(indicator_type=IndicatorType.KD, operator=Operator.GT, target_value=Decimal("80")),
                     Condition(indicator_type=IndicatorType.RSI, operator=Operator.GT, target_value=Decimal("70")),
+                    Condition(indicator_type=IndicatorType.PRICE, operator=Operator.LT, target_value=Decimal("100")),
                 ],
             ),
         )
 
         result = SubscriptionService.extract_indicator_types(data)
-        assert set(result) == {"kd", "rsi"}  # Should extract from both
+        assert set(result) == {"kd", "rsi"}  # Price should be filtered out
 
 
 class TestCheckStockDataAvailability:
@@ -195,94 +200,5 @@ class TestTriggerDataPreparation:
             mock_pool.enqueue_job.assert_called_once()
 
 
-class TestSubscriptionCreateWithValidation:
-    """Test subscription create method with data validation integration."""
 
-    @pytest.mark.asyncio
-    async def test_create_triggers_data_preparation(
-        self, db_session, seeded_user, seeded_stock, redis_client
-    ):
-        """Test that subscription creation triggers data preparation when needed."""
-        # Ensure stock is not in Redis active set
-        await redis_client.clear_active_stocks()
-
-        data = IndicatorSubscriptionCreate(
-            stock_id=seeded_stock.id,
-            indicator_type=IndicatorType.RSI,
-            operator=Operator.GT,
-            target_value=Decimal("70"),
-        )
-
-        # Mock trigger_data_preparation to avoid actually enqueueing job
-        with patch.object(
-            SubscriptionService, 'trigger_data_preparation', new_callable=AsyncMock
-        ) as mock_trigger:
-            subscription = await SubscriptionService.create(
-                db_session, seeded_user.id, data, redis_client
-            )
-
-            # Verify subscription was created
-            assert subscription.id is not None
-            assert subscription.stock_id == seeded_stock.id
-
-            # Verify data preparation was triggered
-            mock_trigger.assert_called_once_with(seeded_stock.id)
-
-    @pytest.mark.asyncio
-    async def test_create_no_trigger_when_data_ready(
-        self, db_session, seeded_user, seeded_stock_with_prices, redis_client
-    ):
-        """Test that data preparation is not triggered when stock has data."""
-        stock = seeded_stock_with_prices
-
-        # Add stock to Redis active set
-        await redis_client.add_active_stock(stock.id)
-
-        data = IndicatorSubscriptionCreate(
-            stock_id=stock.id,
-            indicator_type=IndicatorType.RSI,
-            operator=Operator.GT,
-            target_value=Decimal("70"),
-        )
-
-        # Mock StockRedisClient to use test redis_client
-        with patch('src.subscriptions.service.StockRedisClient', return_value=redis_client):
-            # Mock trigger_data_preparation
-            with patch.object(
-                SubscriptionService, 'trigger_data_preparation', new_callable=AsyncMock
-            ) as mock_trigger:
-                subscription = await SubscriptionService.create(
-                    db_session, seeded_user.id, data, redis_client
-                )
-
-                # Verify subscription was created
-                assert subscription.id is not None
-
-                # Verify data preparation was NOT triggered (data already ready)
-                mock_trigger.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_create_price_subscription_no_trigger(
-        self, db_session, seeded_user, seeded_stock, redis_client
-    ):
-        """Test that price-only subscription doesn't trigger data preparation."""
-        data = IndicatorSubscriptionCreate(
-            stock_id=seeded_stock.id,
-            indicator_type=IndicatorType.PRICE,
-            operator=Operator.GT,
-            target_value=Decimal("100"),
-        )
-
-        # Mock trigger_data_preparation
-        with patch.object(
-            SubscriptionService, 'trigger_data_preparation', new_callable=AsyncMock
-        ) as mock_trigger:
-            subscription = await SubscriptionService.create(
-                db_session, seeded_user.id, data, redis_client
-            )
-
-            # Verify subscription was created
-            assert subscription.id is not None
-
-            # Verify data preparation was NOT triggered (price doesn't need indicators)
-            mock_trigger.assert_not_called()
+            

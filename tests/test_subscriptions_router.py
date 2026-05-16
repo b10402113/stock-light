@@ -46,9 +46,12 @@ class TestSubscriptionsRouter:
                 "title": "RSI Buy Signal",
                 "message": "2330 RSI below 30",
                 "signal_type": "buy",
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -63,9 +66,10 @@ class TestSubscriptionsRouter:
         assert data["data"]["title"] == "RSI Buy Signal"
         assert data["data"]["message"] == "2330 RSI below 30"
         assert data["data"]["signal_type"] == "buy"
-        assert data["data"]["indicator_type"] == "rsi"
-        assert data["data"]["operator"] == "<"
-        assert data["data"]["target_value"] == "30.0000"
+        assert data["data"]["condition_group"]["logic"] == "and"
+        assert data["data"]["condition_group"]["conditions"][0]["indicator_type"] == "rsi"
+        assert data["data"]["condition_group"]["conditions"][0]["operator"] == "<"
+        assert data["data"]["condition_group"]["conditions"][0]["target_value"] == "30.0"
         assert data["data"]["is_active"] is True
 
     @pytest.mark.asyncio
@@ -75,9 +79,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
         )
 
@@ -92,9 +99,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "invalid_type",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "invalid_type", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -110,9 +120,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "invalid",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "invalid", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -128,9 +141,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": 999,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -147,9 +163,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -159,9 +178,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -179,9 +201,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -189,9 +214,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "price", "operator": ">", "target_value": "500.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -219,9 +247,12 @@ class TestSubscriptionsRouter:
                 "/subscriptions",
                 json={
                     "stock_id": stock_id,
-                    "indicator_type": indicators[i],
-                    "operator": operators[i],
-                    "target_value": str(30.0 + i),
+                    "condition_group": {
+                        "logic": "and",
+                        "conditions": [
+                            {"indicator_type": indicators[i], "operator": operators[i], "target_value": str(30.0 + i)}
+                        ],
+                    },
                 },
                 headers=auth_headers,
             )
@@ -255,9 +286,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -270,7 +304,7 @@ class TestSubscriptionsRouter:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["data"]["indicator_type"] == "rsi"
+        assert data["data"]["condition_group"]["conditions"][0]["indicator_type"] == "rsi"
         assert data["data"]["stock"]["id"] == stock_id
 
     @pytest.mark.asyncio
@@ -292,9 +326,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -303,14 +340,23 @@ class TestSubscriptionsRouter:
         # Update subscription
         response = await client.patch(
             f"/subscriptions/{subscription_id}",
-            json={"title": "Updated Title", "target_value": "25.0", "is_active": False},
+            json={
+                "title": "Updated Title",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "25.0"}
+                    ],
+                },
+                "is_active": False,
+            },
             headers=auth_headers,
         )
 
         assert response.status_code == 200
         data = response.json()
         assert data["data"]["title"] == "Updated Title"
-        assert data["data"]["target_value"] == "25.0000"
+        assert data["data"]["condition_group"]["conditions"][0]["target_value"] == "25.0"
         assert data["data"]["is_active"] is False
 
     @pytest.mark.asyncio
@@ -323,9 +369,12 @@ class TestSubscriptionsRouter:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -347,20 +396,18 @@ class TestSubscriptionsRouter:
         assert get_response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_create_subscription_with_compound_condition(
+    async def test_create_subscription_with_multiple_conditions(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test creating subscription with compound condition"""
+        """Test creating subscription with multiple conditions in condition_group"""
         response = await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.0",
-                "compound_condition": {
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
+                        {"indicator_type": "price", "operator": ">", "target_value": "500.0"},
                         {"indicator_type": "rsi", "operator": "<", "target_value": "30"},
                     ],
                 },
@@ -370,7 +417,8 @@ class TestSubscriptionsRouter:
 
         assert response.status_code == 201
         data = response.json()
-        assert data["data"]["compound_condition"]["logic"] == "and"
+        assert data["data"]["condition_group"]["logic"] == "and"
+        assert len(data["data"]["condition_group"]["conditions"]) == 2
 
     @pytest.mark.asyncio
     async def test_create_different_indicator_types(
@@ -384,15 +432,18 @@ class TestSubscriptionsRouter:
                 "/subscriptions",
                 json={
                     "stock_id": stock_id,
-                    "indicator_type": indicator_type,
-                    "operator": ">",
-                    "target_value": "50.0",
+                    "condition_group": {
+                        "logic": "and",
+                        "conditions": [
+                            {"indicator_type": indicator_type, "operator": ">", "target_value": "50.0"}
+                        ],
+                    },
                 },
                 headers=auth_headers,
             )
 
             assert response.status_code == 201
-            assert response.json()["data"]["indicator_type"] == indicator_type
+            assert response.json()["data"]["condition_group"]["conditions"][0]["indicator_type"] == indicator_type
 
     @pytest.mark.asyncio
     async def test_create_different_operators(
@@ -406,12 +457,15 @@ class TestSubscriptionsRouter:
                 "/subscriptions",
                 json={
                     "stock_id": stock_id,
-                    "indicator_type": "rsi",
-                    "operator": operator,
-                    "target_value": str(50.0 + i),  # Different values to avoid duplicate
+                    "condition_group": {
+                        "logic": "and",
+                        "conditions": [
+                            {"indicator_type": "rsi", "operator": operator, "target_value": str(50.0 + i)}
+                        ],
+                    },
                 },
                 headers=auth_headers,
             )
 
             assert response.status_code == 201
-            assert response.json()["data"]["operator"] == operator
+            assert response.json()["data"]["condition_group"]["conditions"][0]["operator"] == operator

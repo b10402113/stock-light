@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from src.subscriptions.schema import (
     Condition,
-    CompoundCondition,
+    ConditionGroup,
     IndicatorSubscriptionCreate,
     IndicatorSubscriptionUpdate,
     IndicatorType,
@@ -99,53 +99,48 @@ class TestTimeframePeriodValidation:
     """Tests for timeframe and period field validation in schemas."""
 
     def test_timeframe_default_is_day(self):
-        """Test that timeframe defaults to 'D'."""
-        data = IndicatorSubscriptionCreate(
-            stock_id=1,
+        """Test that timeframe defaults to 'D' in Condition."""
+        condition = Condition(
             indicator_type=IndicatorType.RSI,
             operator=Operator.GT,
             target_value=Decimal("70"),
         )
-        assert data.timeframe == Timeframe.D
+        assert condition.timeframe == Timeframe.D
 
     def test_timeframe_week_valid(self):
-        """Test that timeframe 'W' is valid."""
-        data = IndicatorSubscriptionCreate(
-            stock_id=1,
+        """Test that timeframe 'W' is valid in Condition."""
+        condition = Condition(
             indicator_type=IndicatorType.RSI,
             operator=Operator.GT,
             target_value=Decimal("70"),
             timeframe=Timeframe.W,
         )
-        assert data.timeframe == Timeframe.W
+        assert condition.timeframe == Timeframe.W
 
     def test_period_valid_for_rsi(self):
         """Test that period is valid for RSI indicator."""
-        data = IndicatorSubscriptionCreate(
-            stock_id=1,
+        condition = Condition(
             indicator_type=IndicatorType.RSI,
             operator=Operator.GT,
             target_value=Decimal("70"),
             period=14,
         )
-        assert data.period == 14
+        assert condition.period == 14
 
     def test_period_valid_for_sma(self):
         """Test that period is valid for SMA indicator."""
-        data = IndicatorSubscriptionCreate(
-            stock_id=1,
+        condition = Condition(
             indicator_type=IndicatorType.SMA,
             operator=Operator.GT,
             target_value=Decimal("100"),
             period=20,
         )
-        assert data.period == 20
+        assert condition.period == 20
 
     def test_period_invalid_for_macd(self):
         """Test that period is not allowed for MACD."""
         with pytest.raises(ValueError, match="period is not applicable for macd"):
-            IndicatorSubscriptionCreate(
-                stock_id=1,
+            Condition(
                 indicator_type=IndicatorType.MACD,
                 operator=Operator.GT,
                 target_value=Decimal("0"),
@@ -155,8 +150,7 @@ class TestTimeframePeriodValidation:
     def test_period_invalid_for_kd(self):
         """Test that period is not allowed for KD."""
         with pytest.raises(ValueError, match="period is not applicable for kd"):
-            IndicatorSubscriptionCreate(
-                stock_id=1,
+            Condition(
                 indicator_type=IndicatorType.KD,
                 operator=Operator.GT,
                 target_value=Decimal("80"),
@@ -166,8 +160,7 @@ class TestTimeframePeriodValidation:
     def test_period_invalid_for_price(self):
         """Test that period is not allowed for Price."""
         with pytest.raises(ValueError, match="period is not applicable for price"):
-            IndicatorSubscriptionCreate(
-                stock_id=1,
+            Condition(
                 indicator_type=IndicatorType.PRICE,
                 operator=Operator.GT,
                 target_value=Decimal("100"),
@@ -177,8 +170,7 @@ class TestTimeframePeriodValidation:
     def test_period_out_of_range_min(self):
         """Test that period below minimum is rejected."""
         with pytest.raises(ValueError):
-            IndicatorSubscriptionCreate(
-                stock_id=1,
+            Condition(
                 indicator_type=IndicatorType.RSI,
                 operator=Operator.GT,
                 target_value=Decimal("70"),
@@ -188,8 +180,7 @@ class TestTimeframePeriodValidation:
     def test_period_out_of_range_max(self):
         """Test that period above maximum is rejected."""
         with pytest.raises(ValueError):
-            IndicatorSubscriptionCreate(
-                stock_id=1,
+            Condition(
                 indicator_type=IndicatorType.SMA,
                 operator=Operator.GT,
                 target_value=Decimal("100"),
@@ -198,17 +189,34 @@ class TestTimeframePeriodValidation:
 
     def test_period_optional_for_rsi(self):
         """Test that period is optional for RSI (defaults to None)."""
-        data = IndicatorSubscriptionCreate(
-            stock_id=1,
+        condition = Condition(
             indicator_type=IndicatorType.RSI,
             operator=Operator.GT,
             target_value=Decimal("70"),
         )
-        assert data.period is None
+        assert condition.period is None
+
+    def test_condition_group_with_single_condition(self):
+        """Test ConditionGroup with single condition."""
+        data = IndicatorSubscriptionCreate(
+            stock_id=1,
+            condition_group=ConditionGroup(
+                logic=LogicOperator.AND,
+                conditions=[
+                    Condition(
+                        indicator_type=IndicatorType.RSI,
+                        operator=Operator.GT,
+                        target_value=Decimal("70"),
+                    ),
+                ],
+            ),
+        )
+        assert data.condition_group.logic == LogicOperator.AND
+        assert len(data.condition_group.conditions) == 1
 
 
 class TestConditionTimeframePeriod:
-    """Tests for timeframe and period in compound condition Condition model."""
+    """Tests for timeframe and period in Condition model."""
 
     def test_condition_with_timeframe(self):
         """Test Condition with timeframe field."""
@@ -240,9 +248,9 @@ class TestConditionTimeframePeriod:
                 period=12,
             )
 
-    def test_compound_condition_with_timeframe_period(self):
-        """Test CompoundCondition with timeframe/period in conditions."""
-        compound = CompoundCondition(
+    def test_condition_group_with_timeframe_period(self):
+        """Test ConditionGroup with timeframe/period in conditions."""
+        condition_group = ConditionGroup(
             logic=LogicOperator.AND,
             conditions=[
                 Condition(
@@ -261,10 +269,10 @@ class TestConditionTimeframePeriod:
                 ),
             ],
         )
-        assert compound.conditions[0].timeframe == Timeframe.W
-        assert compound.conditions[0].period == 14
-        assert compound.conditions[1].timeframe == Timeframe.D
-        assert compound.conditions[1].period == 50
+        assert condition_group.conditions[0].timeframe == Timeframe.W
+        assert condition_group.conditions[0].period == 14
+        assert condition_group.conditions[1].timeframe == Timeframe.D
+        assert condition_group.conditions[1].period == 50
 
 
 class TestSubscriptionRouterTimeframePeriod:
@@ -304,17 +312,19 @@ class TestSubscriptionRouterTimeframePeriod:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
-                "timeframe": "W",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0", "timeframe": "W"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
 
         assert response.status_code == 201
         data = response.json()
-        assert data["data"]["timeframe"] == "W"
+        assert data["data"]["condition_group"]["conditions"][0]["timeframe"] == "W"
 
     @pytest.mark.asyncio
     async def test_create_with_period(
@@ -325,17 +335,19 @@ class TestSubscriptionRouterTimeframePeriod:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
-                "period": 7,
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0", "period": 7}
+                    ],
+                },
             },
             headers=auth_headers,
         )
 
         assert response.status_code == 201
         data = response.json()
-        assert data["data"]["period"] == 7
+        assert data["data"]["condition_group"]["conditions"][0]["period"] == 7
 
     @pytest.mark.asyncio
     async def test_create_with_timeframe_and_period(
@@ -346,19 +358,20 @@ class TestSubscriptionRouterTimeframePeriod:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "sma",
-                "operator": ">",
-                "target_value": "100.0",
-                "timeframe": "D",
-                "period": 50,
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "sma", "operator": ">", "target_value": "100.0", "timeframe": "D", "period": 50}
+                    ],
+                },
             },
             headers=auth_headers,
         )
 
         assert response.status_code == 201
         data = response.json()
-        assert data["data"]["timeframe"] == "D"
-        assert data["data"]["period"] == 50
+        assert data["data"]["condition_group"]["conditions"][0]["timeframe"] == "D"
+        assert data["data"]["condition_group"]["conditions"][0]["period"] == 50
 
     @pytest.mark.asyncio
     async def test_create_invalid_period_for_macd(
@@ -369,10 +382,12 @@ class TestSubscriptionRouterTimeframePeriod:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "macd",
-                "operator": ">",
-                "target_value": "0.0",
-                "period": 12,
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "macd", "operator": ">", "target_value": "0.0", "period": 12}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -389,9 +404,12 @@ class TestSubscriptionRouterTimeframePeriod:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -400,14 +418,21 @@ class TestSubscriptionRouterTimeframePeriod:
         # Update timeframe and period
         response = await client.patch(
             f"/subscriptions/{subscription_id}",
-            json={"timeframe": "W", "period": 21},
+            json={
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0", "timeframe": "W", "period": 21}
+                    ],
+                },
+            },
             headers=auth_headers,
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["data"]["timeframe"] == "W"
-        assert data["data"]["period"] == 21
+        assert data["data"]["condition_group"]["conditions"][0]["timeframe"] == "W"
+        assert data["data"]["condition_group"]["conditions"][0]["period"] == 21
 
     @pytest.mark.asyncio
     async def test_unique_constraint_with_different_timeframe(
@@ -419,10 +444,12 @@ class TestSubscriptionRouterTimeframePeriod:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
-                "timeframe": "D",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0", "timeframe": "D"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -433,10 +460,12 @@ class TestSubscriptionRouterTimeframePeriod:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
-                "timeframe": "W",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0", "timeframe": "W"}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -452,10 +481,12 @@ class TestSubscriptionRouterTimeframePeriod:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
-                "period": 14,
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0", "period": 14}
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -466,25 +497,27 @@ class TestSubscriptionRouterTimeframePeriod:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
-                "period": 7,
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30.0", "period": 7}
+                    ],
+                },
             },
             headers=auth_headers,
         )
         assert response2.status_code == 201
 
     @pytest.mark.asyncio
-    async def test_compound_condition_with_timeframe_period(
+    async def test_condition_group_with_timeframe_period(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test creating subscription with compound condition containing timeframe/period."""
+        """Test creating subscription with condition_group containing timeframe/period."""
         response = await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "compound_condition": {
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
                         {
@@ -509,7 +542,7 @@ class TestSubscriptionRouterTimeframePeriod:
 
         assert response.status_code == 201
         data = response.json()
-        conditions = data["data"]["compound_condition"]["conditions"]
+        conditions = data["data"]["condition_group"]["conditions"]
         assert conditions[0]["timeframe"] == "D"
         assert conditions[0]["period"] == 14
         assert conditions[1]["timeframe"] == "W"

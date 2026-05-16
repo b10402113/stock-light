@@ -195,9 +195,18 @@ async def test_subscription_id(
         title="RSI Buy Signal",
         message="2330 RSI below 30",
         signal_type="buy",
-        indicator_type="rsi",
-        operator="<",
-        target_value=Decimal("30.0"),
+        condition_group={
+            "logic": "and",
+            "conditions": [
+                {
+                    "indicator_type": "rsi",
+                    "operator": "<",
+                    "target_value": "30.0",
+                    "timeframe": "D",
+                    "period": 14,
+                }
+            ],
+        },
         is_active=True,
     )
     db_session.add(subscription)

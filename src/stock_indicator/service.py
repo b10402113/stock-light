@@ -230,10 +230,9 @@ class StockIndicatorService:
             stock_id: Stock ID
 
         Returns:
-            list[str]: List of indicator keys (e.g., ["RSI_14", "MACD_12_26_9"])
+            list[str]: List of indicator keys (e.g., ["RSI_14_D", "MACD_12_26_9_D"])
         """
         from src.subscriptions.model import IndicatorSubscription
-        from src.subscriptions.schema import IndicatorType as SubIndicatorType
 
         stmt = select(IndicatorSubscription).where(
             IndicatorSubscription.stock_id == stock_id,
@@ -246,30 +245,20 @@ class StockIndicatorService:
         indicator_keys = []
 
         for sub in subscriptions:
-            # Handle single condition
-            if sub.indicator_type:
-                key = StockIndicatorService._subscription_to_indicator_key(
-                    sub.indicator_type,
-                    sub.timeframe,
-                    sub.period,
-                )
-                if key:
-                    indicator_keys.append(key)
-
-            # Handle compound condition
-            if sub.compound_condition:
-                for condition in sub.compound_condition.get("conditions", []):
-                    ind_type = condition.get("indicator_type")
-                    timeframe = condition.get("timeframe", "D")
-                    period = condition.get("period")
-                    if ind_type:
-                        key = StockIndicatorService._subscription_to_indicator_key(
-                            ind_type,
-                            timeframe,
-                            period,
-                        )
-                        if key:
-                            indicator_keys.append(key)
+            # Extract from condition_group
+            condition_group = sub.condition_group
+            for condition in condition_group.get("conditions", []):
+                ind_type = condition.get("indicator_type")
+                timeframe = condition.get("timeframe", "D")
+                period = condition.get("period")
+                if ind_type:
+                    key = StockIndicatorService._subscription_to_indicator_key(
+                        ind_type,
+                        timeframe,
+                        period,
+                    )
+                    if key:
+                        indicator_keys.append(key)
 
         # Remove duplicates
         unique_keys = list(set(indicator_keys))

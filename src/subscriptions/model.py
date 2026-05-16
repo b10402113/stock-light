@@ -24,12 +24,7 @@ class IndicatorSubscription(Base):
     title: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     message: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     signal_type: Mapped[str] = mapped_column(String(10), nullable=False, default="buy")
-    timeframe: Mapped[str] = mapped_column(String(1), nullable=False, default="D")
-    period: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
-    indicator_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    operator: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    target_value: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
-    compound_condition: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    condition_group: Mapped[dict] = mapped_column(JSONB, nullable=False)
     is_triggered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     cooldown_end_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -44,8 +39,16 @@ class IndicatorSubscription(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("timeframe IN ('D', 'W')", name="chk_timeframe_valid"),
-        CheckConstraint("(period >= 5 AND period <= 200) OR period IS NULL", name="chk_period_range"),
+        CheckConstraint(
+            """
+            condition_group ? 'logic' AND
+            condition_group ? 'conditions' AND
+            condition_group->>'logic' IN ('and', 'or') AND
+            jsonb_array_length(condition_group->'conditions') >= 1 AND
+            jsonb_array_length(condition_group->'conditions') <= 10
+            """,
+            name="chk_condition_group_structure"
+        ),
         Index(
             "idx_indicator_subs_on_stock_active",
             "stock_id",
@@ -57,16 +60,12 @@ class IndicatorSubscription(Base):
             postgresql_where="(is_deleted = false)"
         ),
         Index(
-            "uix_user_stock_single_condition",
+            "uix_user_stock_condition_group",
             "user_id",
             "stock_id",
-            "indicator_type",
-            "operator",
-            "target_value",
-            "timeframe",
-            "period",
+            "condition_group",
             unique=True,
-            postgresql_where="(is_deleted = false AND compound_condition IS NULL)"
+            postgresql_where="(is_deleted = false)"
         ),
     )
 

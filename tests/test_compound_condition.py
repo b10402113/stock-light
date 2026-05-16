@@ -1,22 +1,22 @@
-"""Tests for compound_condition functionality in indicator subscriptions."""
+"""Tests for condition_group functionality in indicator subscriptions."""
 
 import pytest
 from httpx import AsyncClient
 
 
-class TestCompoundCondition:
-    """Tests for compound_condition field in IndicatorSubscription"""
+class TestConditionGroup:
+    """Tests for condition_group field in IndicatorSubscription"""
 
     @pytest.fixture
     async def auth_headers(self, client: AsyncClient) -> dict[str, str]:
         """Create authenticated user and return headers with token"""
         await client.post(
             "/auth/register",
-            json={"email": "compound_test@example.com", "password": "password123"},
+            json={"email": "condition_test@example.com", "password": "password123"},
         )
         login_response = await client.post(
             "/auth/login",
-            json={"email": "compound_test@example.com", "password": "password123"},
+            json={"email": "condition_test@example.com", "password": "password123"},
         )
         token = login_response.json()["data"]["access_token"]
         return {"Authorization": f"Bearer {token}"}
@@ -31,24 +31,21 @@ class TestCompoundCondition:
         return response.json()["data"]["id"]
 
     @pytest.mark.asyncio
-    async def test_create_with_single_compound_condition(
+    async def test_create_with_single_condition(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test creating subscription with one additional condition (AND logic)"""
+        """Test creating subscription with one condition in condition_group"""
         response = await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "title": "Price + RSI Buy Signal",
-                "message": "Trigger when price > 500 AND RSI < 30",
+                "title": "RSI Buy Signal",
+                "message": "Trigger when RSI < 30",
                 "signal_type": "buy",
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.0",
-                "compound_condition": {
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
-                        {"indicator_type": "rsi", "operator": "<", "target_value": "30"},
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
                     ],
                 },
             },
@@ -57,17 +54,17 @@ class TestCompoundCondition:
 
         assert response.status_code == 201
         data = response.json()["data"]
-        assert data["compound_condition"]["logic"] == "and"
-        assert len(data["compound_condition"]["conditions"]) == 1
-        assert data["compound_condition"]["conditions"][0]["indicator_type"] == "rsi"
-        assert data["compound_condition"]["conditions"][0]["operator"] == "<"
-        assert data["compound_condition"]["conditions"][0]["target_value"] == "30"
+        assert data["condition_group"]["logic"] == "and"
+        assert len(data["condition_group"]["conditions"]) == 1
+        assert data["condition_group"]["conditions"][0]["indicator_type"] == "rsi"
+        assert data["condition_group"]["conditions"][0]["operator"] == "<"
+        assert data["condition_group"]["conditions"][0]["target_value"] == "30"
 
     @pytest.mark.asyncio
-    async def test_create_with_multiple_compound_conditions(
+    async def test_create_with_multiple_conditions(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test creating subscription with multiple additional conditions (AND logic)"""
+        """Test creating subscription with multiple conditions (AND logic)"""
         response = await client.post(
             "/subscriptions",
             json={
@@ -75,14 +72,12 @@ class TestCompoundCondition:
                 "title": "Complex Buy Signal",
                 "message": "Trigger when price > 500 AND RSI < 30 AND MACD > 0",
                 "signal_type": "buy",
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.0",
-                "compound_condition": {
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
-                        {"indicator_type": "rsi", "operator": "<", "target_value": "30"},
-                        {"indicator_type": "macd", "operator": ">", "target_value": "0"},
+                        {"indicator_type": "price", "operator": ">", "target_value": "500", "timeframe": "D"},
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
+                        {"indicator_type": "macd", "operator": ">", "target_value": "0", "timeframe": "D"},
                     ],
                 },
             },
@@ -91,16 +86,17 @@ class TestCompoundCondition:
 
         assert response.status_code == 201
         data = response.json()["data"]
-        assert data["compound_condition"]["logic"] == "and"
-        assert len(data["compound_condition"]["conditions"]) == 2
-        assert data["compound_condition"]["conditions"][0]["indicator_type"] == "rsi"
-        assert data["compound_condition"]["conditions"][1]["indicator_type"] == "macd"
+        assert data["condition_group"]["logic"] == "and"
+        assert len(data["condition_group"]["conditions"]) == 3
+        assert data["condition_group"]["conditions"][0]["indicator_type"] == "price"
+        assert data["condition_group"]["conditions"][1]["indicator_type"] == "rsi"
+        assert data["condition_group"]["conditions"][2]["indicator_type"] == "macd"
 
     @pytest.mark.asyncio
     async def test_create_with_or_logic(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test creating subscription with OR logic compound condition"""
+        """Test creating subscription with OR logic condition_group"""
         response = await client.post(
             "/subscriptions",
             json={
@@ -108,13 +104,11 @@ class TestCompoundCondition:
                 "title": "Either Condition Signal",
                 "message": "Trigger when RSI < 30 OR RSI > 70",
                 "signal_type": "sell",
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
-                "compound_condition": {
+                "condition_group": {
                     "logic": "or",
                     "conditions": [
-                        {"indicator_type": "rsi", "operator": ">", "target_value": "70"},
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
+                        {"indicator_type": "rsi", "operator": ">", "target_value": "70", "timeframe": "D", "period": 14},
                     ],
                 },
             },
@@ -123,67 +117,27 @@ class TestCompoundCondition:
 
         assert response.status_code == 201
         data = response.json()["data"]
-        assert data["compound_condition"]["logic"] == "or"
-        assert len(data["compound_condition"]["conditions"]) == 1
+        assert data["condition_group"]["logic"] == "or"
+        assert len(data["condition_group"]["conditions"]) == 2
 
     @pytest.mark.asyncio
-    async def test_create_without_compound_condition(
+    async def test_get_subscription_with_condition_group(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test creating subscription without compound_condition (simple condition)"""
-        response = await client.post(
-            "/subscriptions",
-            json={
-                "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
-            },
-            headers=auth_headers,
-        )
-
-        assert response.status_code == 201
-        data = response.json()["data"]
-        assert data["compound_condition"] is None
-
-    @pytest.mark.asyncio
-    async def test_create_with_null_compound_condition(
-        self, client: AsyncClient, auth_headers: dict, stock_id: int
-    ):
-        """Test creating subscription with explicit null compound_condition"""
-        response = await client.post(
-            "/subscriptions",
-            json={
-                "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
-                "compound_condition": None,
-            },
-            headers=auth_headers,
-        )
-
-        assert response.status_code == 201
-        data = response.json()["data"]
-        assert data["compound_condition"] is None
-
-    @pytest.mark.asyncio
-    async def test_get_subscription_with_compound_condition(
-        self, client: AsyncClient, auth_headers: dict, stock_id: int
-    ):
-        """Test retrieving subscription preserves compound_condition"""
-        # Create with compound condition
+        """Test retrieving subscription preserves condition_group"""
+        # Create with condition_group
         create_response = await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.0",
-                "compound_condition": {
+                "title": "Price + KD Signal",
+                "message": "Trigger when price > 500 AND KD < 20",
+                "signal_type": "buy",
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
-                        {"indicator_type": "kd", "operator": "<", "target_value": "20"},
+                        {"indicator_type": "price", "operator": ">", "target_value": "500", "timeframe": "D"},
+                        {"indicator_type": "kd", "operator": "<", "target_value": "20", "timeframe": "D"},
                     ],
                 },
             },
@@ -199,35 +153,43 @@ class TestCompoundCondition:
 
         assert get_response.status_code == 200
         data = get_response.json()["data"]
-        assert data["compound_condition"]["logic"] == "and"
-        assert data["compound_condition"]["conditions"][0]["indicator_type"] == "kd"
+        assert data["condition_group"]["logic"] == "and"
+        assert data["condition_group"]["conditions"][0]["indicator_type"] == "price"
+        assert data["condition_group"]["conditions"][1]["indicator_type"] == "kd"
 
     @pytest.mark.asyncio
-    async def test_update_compound_condition(
+    async def test_update_condition_group(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test updating subscription's compound_condition"""
-        # Create without compound condition
+        """Test updating subscription's condition_group"""
+        # Create with single condition
         create_response = await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
+                "title": "RSI Signal",
+                "message": "Trigger when RSI < 30",
+                "signal_type": "buy",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
+                    ],
+                },
             },
             headers=auth_headers,
         )
         subscription_id = create_response.json()["data"]["id"]
 
-        # Update to add compound condition
+        # Update to add more conditions
         update_response = await client.patch(
             f"/subscriptions/{subscription_id}",
             json={
-                "compound_condition": {
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
-                        {"indicator_type": "macd", "operator": ">", "target_value": "0"},
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
+                        {"indicator_type": "macd", "operator": ">", "target_value": "0", "timeframe": "D"},
                     ],
                 },
             },
@@ -236,61 +198,27 @@ class TestCompoundCondition:
 
         assert update_response.status_code == 200
         data = update_response.json()["data"]
-        assert data["compound_condition"]["logic"] == "and"
-        assert len(data["compound_condition"]["conditions"]) == 1
+        assert data["condition_group"]["logic"] == "and"
+        assert len(data["condition_group"]["conditions"]) == 2
 
     @pytest.mark.asyncio
-    async def test_remove_compound_condition(
+    async def test_list_subscriptions_with_condition_groups(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test removing compound_condition by setting to null"""
-        # Create with compound condition
-        create_response = await client.post(
-            "/subscriptions",
-            json={
-                "stock_id": stock_id,
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.0",
-                "compound_condition": {
-                    "logic": "and",
-                    "conditions": [
-                        {"indicator_type": "rsi", "operator": "<", "target_value": "30"},
-                    ],
-                },
-            },
-            headers=auth_headers,
-        )
-        subscription_id = create_response.json()["data"]["id"]
-
-        # Update to remove compound condition
-        update_response = await client.patch(
-            f"/subscriptions/{subscription_id}",
-            json={"compound_condition": None},
-            headers=auth_headers,
-        )
-
-        assert update_response.status_code == 200
-        data = update_response.json()["data"]
-        assert data["compound_condition"] is None
-
-    @pytest.mark.asyncio
-    async def test_list_subscriptions_with_compound_conditions(
-        self, client: AsyncClient, auth_headers: dict, stock_id: int
-    ):
-        """Test listing subscriptions preserves compound_condition data"""
-        # Create multiple subscriptions with different compound conditions
+        """Test listing subscriptions preserves condition_group data"""
+        # Create multiple subscriptions
         await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.0",
-                "compound_condition": {
+                "title": "Complex Signal",
+                "message": "Multi-condition",
+                "signal_type": "buy",
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
-                        {"indicator_type": "rsi", "operator": "<", "target_value": "30"},
+                        {"indicator_type": "price", "operator": ">", "target_value": "500", "timeframe": "D"},
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
                     ],
                 },
             },
@@ -301,10 +229,15 @@ class TestCompoundCondition:
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": ">",
-                "target_value": "70.0",
-                "compound_condition": None,
+                "title": "Simple Signal",
+                "message": "Single condition",
+                "signal_type": "sell",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": ">", "target_value": "70", "timeframe": "D", "period": 14},
+                    ],
+                },
             },
             headers=auth_headers,
         )
@@ -316,33 +249,31 @@ class TestCompoundCondition:
         data = response.json()["data"]
         assert len(data["data"]) == 2
 
-        # First should have compound_condition
-        sub_with_condition = data["data"][0]
-        assert sub_with_condition["compound_condition"]["logic"] == "and"
-
-        # Second should have null compound_condition
-        sub_without_condition = data["data"][1]
-        assert sub_without_condition["compound_condition"] is None
+        # Both should have condition_group
+        for sub in data["data"]:
+            assert sub["condition_group"]["logic"] == "and"
+            assert len(sub["condition_group"]["conditions"]) >= 1
 
     @pytest.mark.asyncio
-    async def test_compound_condition_with_different_indicator_types(
+    async def test_condition_group_with_different_indicator_types(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test compound_condition with all supported indicator types"""
+        """Test condition_group with all supported indicator types"""
         response = await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.0",
-                "compound_condition": {
+                "title": "All Indicators",
+                "message": "Test all indicator types",
+                "signal_type": "buy",
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
-                        {"indicator_type": "rsi", "operator": "<", "target_value": "30"},
-                        {"indicator_type": "macd", "operator": ">", "target_value": "0"},
-                        {"indicator_type": "kd", "operator": "<", "target_value": "20"},
-                        {"indicator_type": "price", "operator": ">=", "target_value": "480"},
+                        {"indicator_type": "price", "operator": ">", "target_value": "500", "timeframe": "D"},
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
+                        {"indicator_type": "sma", "operator": "<", "target_value": "480", "timeframe": "D", "period": 20},
+                        {"indicator_type": "macd", "operator": ">", "target_value": "0", "timeframe": "D"},
+                        {"indicator_type": "kd", "operator": "<", "target_value": "20", "timeframe": "D"},
                     ],
                 },
             },
@@ -351,32 +282,33 @@ class TestCompoundCondition:
 
         assert response.status_code == 201
         data = response.json()["data"]
-        conditions = data["compound_condition"]["conditions"]
+        conditions = data["condition_group"]["conditions"]
         indicator_types = [c["indicator_type"] for c in conditions]
+        assert "price" in indicator_types
         assert "rsi" in indicator_types
+        assert "sma" in indicator_types
         assert "macd" in indicator_types
         assert "kd" in indicator_types
-        assert "price" in indicator_types
 
     @pytest.mark.asyncio
-    async def test_compound_condition_with_all_operators(
+    async def test_condition_group_with_all_operators(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test compound_condition with all supported operators"""
+        """Test condition_group with all supported operators"""
         operators = ["<", ">", "<=", ">=", "==", "!="]
 
-        for i, op in enumerate(operators):
+        for op in operators:
             response = await client.post(
                 "/subscriptions",
                 json={
                     "stock_id": stock_id,
-                    "indicator_type": "rsi",
-                    "operator": "<",
-                    "target_value": str(30.0 + i),
-                    "compound_condition": {
+                    "title": f"Test {op}",
+                    "message": f"Test operator {op}",
+                    "signal_type": "buy",
+                    "condition_group": {
                         "logic": "and",
                         "conditions": [
-                            {"indicator_type": "rsi", "operator": op, "target_value": str(50.0 + i)},
+                            {"indicator_type": "rsi", "operator": op, "target_value": "50", "timeframe": "D", "period": 14},
                         ],
                     },
                 },
@@ -385,24 +317,24 @@ class TestCompoundCondition:
 
             assert response.status_code == 201
             data = response.json()["data"]
-            assert data["compound_condition"]["conditions"][0]["operator"] == op
+            assert data["condition_group"]["conditions"][0]["operator"] == op
 
     @pytest.mark.asyncio
-    async def test_compound_condition_preserves_decimal_values(
+    async def test_condition_group_preserves_decimal_values(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test compound_condition preserves decimal precision"""
+        """Test condition_group preserves decimal precision"""
         response = await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.1234",
-                "compound_condition": {
+                "title": "Decimal Test",
+                "message": "Test decimal precision",
+                "signal_type": "buy",
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
-                        {"indicator_type": "rsi", "operator": "<", "target_value": "29.5678"},
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "29.5678", "timeframe": "D", "period": 14},
                     ],
                 },
             },
@@ -411,25 +343,24 @@ class TestCompoundCondition:
 
         assert response.status_code == 201
         data = response.json()["data"]
-        # Note: target_value in conditions is stored as string in JSON
-        assert data["compound_condition"]["conditions"][0]["target_value"] == "29.5678"
+        assert str(data["condition_group"]["conditions"][0]["target_value"]) == "29.5678"
 
     @pytest.mark.asyncio
-    async def test_delete_subscription_with_compound_condition(
+    async def test_delete_subscription_with_condition_group(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test deleting subscription with compound_condition"""
+        """Test deleting subscription with condition_group"""
         create_response = await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.0",
-                "compound_condition": {
+                "title": "To Delete",
+                "message": "Will be deleted",
+                "signal_type": "buy",
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
-                        {"indicator_type": "rsi", "operator": "<", "target_value": "30"},
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
                     ],
                 },
             },
@@ -452,18 +383,18 @@ class TestCompoundCondition:
         assert get_response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_empty_conditions_array(
+    async def test_empty_conditions_array_rejected(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test compound_condition with empty conditions array - should be rejected"""
+        """Test condition_group with empty conditions array - should be rejected"""
         response = await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "rsi",
-                "operator": "<",
-                "target_value": "30.0",
-                "compound_condition": {
+                "title": "Empty Conditions",
+                "message": "Should be rejected",
+                "signal_type": "buy",
+                "condition_group": {
                     "logic": "and",
                     "conditions": [],
                 },
@@ -475,18 +406,18 @@ class TestCompoundCondition:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_nested_compound_condition(
+    async def test_nested_condition_rejected(
         self, client: AsyncClient, auth_headers: dict, stock_id: int
     ):
-        """Test nested compound_condition - should be rejected (Condition model doesn't support nesting)"""
+        """Test nested condition structure - should be rejected"""
         response = await client.post(
             "/subscriptions",
             json={
                 "stock_id": stock_id,
-                "indicator_type": "price",
-                "operator": ">",
-                "target_value": "500.0",
-                "compound_condition": {
+                "title": "Nested",
+                "message": "Should be rejected",
+                "signal_type": "buy",
+                "condition_group": {
                     "logic": "and",
                     "conditions": [
                         {
@@ -496,12 +427,182 @@ class TestCompoundCondition:
                                 {"indicator_type": "kd", "operator": "<", "target_value": "20"},
                             ],
                         },
-                        {"indicator_type": "macd", "operator": ">", "target_value": "0"},
                     ],
                 },
             },
             headers=auth_headers,
         )
 
-        # Nested compound conditions should be rejected (Condition model requires indicator_type, operator, target_value)
+        # Nested conditions should be rejected (Condition model requires indicator_type, operator, target_value)
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_missing_condition_group_rejected(
+        self, client: AsyncClient, auth_headers: dict, stock_id: int
+    ):
+        """Test missing condition_group - should be rejected"""
+        response = await client.post(
+            "/subscriptions",
+            json={
+                "stock_id": stock_id,
+                "title": "No Conditions",
+                "message": "Should be rejected",
+                "signal_type": "buy",
+            },
+            headers=auth_headers,
+        )
+
+        # condition_group is required
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_max_conditions_limit(
+        self, client: AsyncClient, auth_headers: dict, stock_id: int
+    ):
+        """Test max 10 conditions limit"""
+        conditions = [
+            {"indicator_type": "price", "operator": ">", "target_value": str(500 + i), "timeframe": "D"}
+            for i in range(11)
+        ]
+
+        response = await client.post(
+            "/subscriptions",
+            json={
+                "stock_id": stock_id,
+                "title": "Too Many Conditions",
+                "message": "Should be rejected",
+                "signal_type": "buy",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": conditions,
+                },
+            },
+            headers=auth_headers,
+        )
+
+        # More than 10 conditions should be rejected
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_period_validation_for_rsi_sma(
+        self, client: AsyncClient, auth_headers: dict, stock_id: int
+    ):
+        """Test period field validation for RSI/SMA"""
+        # RSI with valid period
+        response = await client.post(
+            "/subscriptions",
+            json={
+                "stock_id": stock_id,
+                "title": "RSI with period",
+                "message": "RSI period 14",
+                "signal_type": "buy",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
+                    ],
+                },
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+        # SMA with valid period
+        response = await client.post(
+            "/subscriptions",
+            json={
+                "stock_id": stock_id,
+                "title": "SMA with period",
+                "message": "SMA period 20",
+                "signal_type": "buy",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "sma", "operator": ">", "target_value": "500", "timeframe": "D", "period": 20},
+                    ],
+                },
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+        # MACD with period should be rejected
+        response = await client.post(
+            "/subscriptions",
+            json={
+                "stock_id": stock_id,
+                "title": "MACD with period",
+                "message": "Should be rejected",
+                "signal_type": "buy",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "macd", "operator": ">", "target_value": "0", "timeframe": "D", "period": 14},
+                    ],
+                },
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_timeframe_validation(
+        self, client: AsyncClient, auth_headers: dict, stock_id: int
+    ):
+        """Test timeframe field validation (D or W)"""
+        # Daily timeframe
+        response = await client.post(
+            "/subscriptions",
+            json={
+                "stock_id": stock_id,
+                "title": "Daily",
+                "message": "Daily timeframe",
+                "signal_type": "buy",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "D", "period": 14},
+                    ],
+                },
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+        # Weekly timeframe
+        response = await client.post(
+            "/subscriptions",
+            json={
+                "stock_id": stock_id,
+                "title": "Weekly",
+                "message": "Weekly timeframe",
+                "signal_type": "buy",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "W", "period": 14},
+                    ],
+                },
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+        # Invalid timeframe should be rejected
+        response = await client.post(
+            "/subscriptions",
+            json={
+                "stock_id": stock_id,
+                "title": "Invalid Timeframe",
+                "message": "Should be rejected",
+                "signal_type": "buy",
+                "condition_group": {
+                    "logic": "and",
+                    "conditions": [
+                        {"indicator_type": "rsi", "operator": "<", "target_value": "30", "timeframe": "M", "period": 14},
+                    ],
+                },
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 422

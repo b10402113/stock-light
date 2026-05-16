@@ -15,7 +15,7 @@ from src.stocks.model import Stock
 from src.stocks.service import DailyPriceService
 from src.subscriptions.model import IndicatorSubscription, NotificationHistory, ScheduledReminder
 from src.subscriptions.schema import (
-    CompoundCondition,
+    ConditionGroup,
     FrequencyType,
     IndicatorConfigResponse,
     IndicatorFieldConfig,
@@ -149,14 +149,7 @@ class SubscriptionService:
             title=subscription.title,
             message=subscription.message,
             signal_type=subscription.signal_type,
-            timeframe=subscription.timeframe,
-            period=subscription.period,
-            indicator_type=subscription.indicator_type,
-            operator=subscription.operator,
-            target_value=subscription.target_value,
-            compound_condition=CompoundCondition.model_validate(subscription.compound_condition)
-            if subscription.compound_condition
-            else None,
+            condition_group=ConditionGroup.model_validate(subscription.condition_group),
             is_triggered=subscription.is_triggered,
             cooldown_end_at=subscription.cooldown_end_at,
             is_active=subscription.is_active,
@@ -257,48 +250,6 @@ class SubscriptionService:
         return used < max_subscriptions, used, max_subscriptions
 
     @staticmethod
-    async def check_duplicate(
-        db: AsyncSession,
-        user_id: int,
-        stock_id: int,
-        indicator_type: str,
-        operator: str,
-        target_value: Decimal,
-        timeframe: str = "D",
-        period: int | None = None,
-    ) -> bool:
-        """檢查是否已存在相同訂閱.
-
-        Args:
-            db: 資料庫會話
-            user_id: 用戶 ID
-            stock_id: 股票 ID
-            indicator_type: 指標類型
-            operator: 運算子
-            target_value: 目標值
-            timeframe: 時間框架 (D or W)
-            period: 週期 (optional)
-
-        Returns:
-            bool: 是否存在重複
-        """
-        exists = await db.scalar(
-            select(func.count())
-            .select_from(IndicatorSubscription)
-            .where(
-                IndicatorSubscription.user_id == user_id,
-                IndicatorSubscription.stock_id == stock_id,
-                IndicatorSubscription.indicator_type == indicator_type,
-                IndicatorSubscription.operator == operator,
-                IndicatorSubscription.target_value == target_value,
-                IndicatorSubscription.timeframe == timeframe,
-                IndicatorSubscription.period == period,
-                IndicatorSubscription.is_deleted.is_(False),
-            )
-        )
-        return (exists or 0) > 0
-
-    @staticmethod
     async def create(
         db: AsyncSession,
         user_id: int,
@@ -317,7 +268,7 @@ class SubscriptionService:
             IndicatorSubscription: 創建後的訂閱實體
 
         Raises:
-            ValueError: 配額超額、股票不存在、或重複訂閱
+            ValueError: 配額超額、股票不存在
         """
         # Check quota
         has_quota, used, quota = await SubscriptionService.check_quota(db, user_id)
@@ -344,25 +295,7 @@ class SubscriptionService:
                 except Exception as exc:
                     logger.warning(f"Failed to add stock {data.stock_id} to Redis: {exc}")
 
-        # Check for duplicate (only for single conditions)
-        if data.indicator_type and data.operator and data.target_value:
-            is_duplicate = await SubscriptionService.check_duplicate(
-                db,
-                user_id,
-                data.stock_id,
-                data.indicator_type.value,
-                data.operator.value,
-                data.target_value,
-                data.timeframe.value,
-                data.period,
-            )
-            if is_duplicate:
-                raise ValueError(
-                    f"Duplicate subscription already exists for this condition"
-                )
-
-        # Stock activation is handled above - worker will periodically fetch
-        # active stocks with indicator subscriptions and calculate indicators
+        # Duplicate check is handled by database unique constraint on (user_id, stock_id, condition_group)
 
         subscription = IndicatorSubscription(
             user_id=user_id,
@@ -370,12 +303,7 @@ class SubscriptionService:
             title=data.title,
             message=data.message,
             signal_type=data.signal_type.value,
-            timeframe=data.timeframe.value,
-            period=data.period,
-            indicator_type=data.indicator_type.value if data.indicator_type else None,
-            operator=data.operator.value if data.operator else None,
-            target_value=data.target_value if data.target_value else None,
-            compound_condition=data.compound_condition.model_dump(mode="json") if data.compound_condition else None,
+            condition_group=data.condition_group.model_dump(mode="json"),
         )
         db.add(subscription)
         await db.commit()
@@ -403,16 +331,10 @@ class SubscriptionService:
         # Convert enum values to strings if present
         if "signal_type" in update_data and update_data["signal_type"]:
             update_data["signal_type"] = update_data["signal_type"].value
-        if "timeframe" in update_data and update_data["timeframe"]:
-            update_data["timeframe"] = update_data["timeframe"].value
-        if "indicator_type" in update_data and update_data["indicator_type"]:
-            update_data["indicator_type"] = update_data["indicator_type"].value
-        if "operator" in update_data and update_data["operator"]:
-            update_data["operator"] = update_data["operator"].value
-        # Convert CompoundCondition to dict for JSONB storage
-        if "compound_condition" in update_data and update_data["compound_condition"]:
-            update_data["compound_condition"] = CompoundCondition.model_validate(
-                update_data["compound_condition"]
+        # Convert ConditionGroup to dict for JSONB storage
+        if "condition_group" in update_data and update_data["condition_group"]:
+            update_data["condition_group"] = ConditionGroup.model_validate(
+                update_data["condition_group"]
             ).model_dump(mode="json")
 
         for key, value in update_data.items():
@@ -442,9 +364,7 @@ class SubscriptionService:
 
     @staticmethod
     def extract_indicator_types(data: IndicatorSubscriptionCreate) -> list[str]:
-        """Extract all indicator types from subscription data.
-
-        Handles both single condition and compound condition formats.
+        """Extract all indicator types from subscription condition_group.
 
         Args:
             data: Subscription creation data
@@ -454,15 +374,10 @@ class SubscriptionService:
         """
         indicator_types = []
 
-        # Single condition
-        if data.indicator_type:
-            indicator_types.append(data.indicator_type.value)
-
-        # Compound condition - extract from all conditions
-        if data.compound_condition:
-            for condition in data.compound_condition.conditions:
-                if condition.indicator_type:
-                    indicator_types.append(condition.indicator_type.value)
+        # Extract from all conditions in the condition_group
+        for condition in data.condition_group.conditions:
+            if condition.indicator_type:
+                indicator_types.append(condition.indicator_type.value)
 
         # Remove duplicates and filter out "price" (no indicator calculation needed)
         unique_types = list(set(indicator_types))

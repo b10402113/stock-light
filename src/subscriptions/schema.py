@@ -77,11 +77,11 @@ class Condition(BaseModel):
         return self
 
 
-class CompoundCondition(BaseModel):
-    """Complex conditions with AND/OR logic"""
+class ConditionGroup(BaseModel):
+    """Condition group with AND/OR logic - always used for subscriptions"""
 
     logic: LogicOperator = Field(..., description="Logic operator: and, or")
-    conditions: list[Condition] = Field(..., min_length=1, description="List of conditions")
+    conditions: list[Condition] = Field(..., min_length=1, max_length=10, description="List of conditions (1-10)")
 
     @field_validator("conditions")
     @classmethod
@@ -108,32 +108,7 @@ class IndicatorSubscriptionBase(BaseModel):
     title: str = Field("", max_length=50, description="Alert title (max 50 chars)")
     message: str = Field("", max_length=200, description="Alert message content (max 200 chars)")
     signal_type: SignalType = Field(SignalType.BUY, description="Signal type: buy or sell")
-    timeframe: Timeframe = Field(Timeframe.D, description="Data timeframe: D (day) or W (week)")
-    period: Optional[int] = Field(None, ge=5, le=200, description="Indicator period for RSI/SMA")
-    indicator_type: Optional[IndicatorType] = Field(None, description="Type of indicator (rsi, sma, macd, kd, price)")
-    operator: Optional[Operator] = Field(None, description="Comparison operator")
-    target_value: Optional[Decimal] = Field(None, ge=0, description="Target value for the indicator")
-    compound_condition: Optional[CompoundCondition] = Field(None, description="Complex conditions (AND/OR logic)")
-
-    @model_validator(mode="after")
-    def validate_period_for_indicator(self):
-        """Validate that period is only set for RSI/SMA indicators"""
-        if self.period is not None:
-            if self.indicator_type not in (IndicatorType.RSI, IndicatorType.SMA):
-                raise ValueError(f"period is not applicable for {self.indicator_type} indicator")
-        return self
-
-    @model_validator(mode="after")
-    def validate_condition_fields(self):
-        """Validate that at least one condition is provided"""
-        has_single = all([self.indicator_type, self.operator, self.target_value])
-        has_compound = self.compound_condition is not None
-
-        # Allow both (primary + additional) but require at least one
-        if not has_single and not has_compound:
-            raise ValueError("Either single condition fields (indicator_type, operator, target_value) or compound_condition must be provided")
-
-        return self
+    condition_group: ConditionGroup = Field(..., description="Condition group with 1-10 conditions (AND/OR logic)")
 
 
 class IndicatorSubscriptionCreate(IndicatorSubscriptionBase):
@@ -148,12 +123,7 @@ class IndicatorSubscriptionUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=50, description="Alert title")
     message: Optional[str] = Field(None, max_length=200, description="Alert message content")
     signal_type: Optional[SignalType] = Field(None, description="Signal type")
-    timeframe: Optional[Timeframe] = Field(None, description="Data timeframe")
-    period: Optional[int] = Field(None, ge=5, le=200, description="Indicator period for RSI/SMA")
-    indicator_type: Optional[IndicatorType] = Field(None, description="Type of indicator")
-    operator: Optional[Operator] = Field(None, description="Comparison operator")
-    target_value: Optional[Decimal] = Field(None, ge=0, description="Target value")
-    compound_condition: Optional[CompoundCondition] = Field(None, description="Complex conditions")
+    condition_group: Optional[ConditionGroup] = Field(None, description="Condition group")
     is_active: Optional[bool] = Field(None, description="Subscription active status")
 
 
@@ -168,12 +138,7 @@ class IndicatorSubscriptionResponse(BaseModel):
     title: str
     message: str
     signal_type: str
-    timeframe: str
-    period: Optional[int] = None
-    indicator_type: Optional[str] = None
-    operator: Optional[str] = None
-    target_value: Optional[Decimal] = None
-    compound_condition: Optional[CompoundCondition] = None
+    condition_group: ConditionGroup
     is_triggered: bool
     cooldown_end_at: Optional[datetime] = None
     is_active: bool
