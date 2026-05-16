@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from src.schemas.base import BaseSchema
+
 
 class SignalType(StrEnum):
     """信號類型"""
@@ -127,10 +129,8 @@ class IndicatorSubscriptionUpdate(BaseModel):
     is_active: Optional[bool] = Field(None, description="Subscription active status")
 
 
-class IndicatorSubscriptionResponse(BaseModel):
+class IndicatorSubscriptionResponse(BaseSchema):
     """Schema for subscription response"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int
     stock: StockBrief
@@ -203,10 +203,8 @@ class ScheduledReminderUpdate(BaseModel):
     is_active: Optional[bool] = Field(None, description="Reminder active status")
 
 
-class ScheduledReminderResponse(BaseModel):
+class ScheduledReminderResponse(BaseSchema):
     """Schema for scheduled reminder response"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int
     stock: StockBrief
@@ -247,10 +245,8 @@ class ScheduledReminderListResponse(BaseModel):
     has_more: bool = False
 
 
-class NotificationHistoryResponse(BaseModel):
+class NotificationHistoryResponse(BaseSchema):
     """Schema for notification history response"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int
     user_id: int

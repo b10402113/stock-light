@@ -3,6 +3,8 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Integer, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from src.utils.timezone import now as timezone_now
+
 
 class Base(DeclarativeBase):
     """SQLAlchemy Model 基類"""
@@ -32,7 +34,7 @@ class Base(DeclarativeBase):
     def soft_delete(self) -> None:
         """軟刪除"""
         self.is_deleted = True
-        self.updated_at = datetime.utcnow()
+        self.updated_at = timezone_now()
 
 
 class BaseWithoutAutoId(DeclarativeBase):
@@ -62,4 +64,4 @@ class BaseWithoutAutoId(DeclarativeBase):
     def soft_delete(self) -> None:
         """軟刪除"""
         self.is_deleted = True
-        self.updated_at = datetime.utcnow()
+        self.updated_at = timezone_now()

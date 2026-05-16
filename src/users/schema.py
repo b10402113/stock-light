@@ -1,14 +1,18 @@
 """User schemas."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
 
+from src.schemas.base import BaseSchema
 
-class UserResponse(BaseModel):
+
+class UserResponse(BaseSchema):
     """用戶響應"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int
     email: str | None = None
     is_active: bool
+    created_at: datetime
+    updated_at: datetime
 

@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.schemas.base import BaseSchema
+
 
 class StockSource(IntEnum):
     """股票資料來源"""
@@ -172,10 +174,8 @@ class DailyPriceBulkCreate(BaseModel):
     prices: list[DailyPriceBase] = Field(..., min_length=1, max_length=1000, description="價格列表")
 
 
-class DailyPriceResponse(DailyPriceBase):
+class DailyPriceResponse(DailyPriceBase, BaseSchema):
     """日K線響應"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(..., description="價格 ID")
     stock_id: int = Field(..., description="股票 ID")

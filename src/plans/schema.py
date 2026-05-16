@@ -5,6 +5,8 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict
 
+from src.schemas.base import BaseSchema
+
 
 class BillingCycle(str, Enum):
     """計費週期"""
@@ -28,10 +30,8 @@ class LevelConfigResponse(BaseModel):
     is_purchasable: bool
 
 
-class PlanResponse(BaseModel):
+class PlanResponse(BaseSchema):
     """方案響應"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int
     user_id: int
@@ -43,10 +43,8 @@ class PlanResponse(BaseModel):
     created_at: datetime
 
 
-class PlanWithLevelResponse(BaseModel):
+class PlanWithLevelResponse(BaseSchema):
     """方案含等級配置響應"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int
     user_id: int

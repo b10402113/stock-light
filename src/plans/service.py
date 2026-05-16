@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from src.plans.model import LevelConfig, Plan
 from src.plans.schema import BillingCycle, PlanCreate, PlanUpdate
+from src.utils.timezone import now
 
 
 class PlanService:
@@ -101,7 +102,7 @@ class PlanService:
             datetime: 到期日
         """
         if start_date is None:
-            start_date = datetime.now()
+            start_date = now()
 
         if billing_cycle == BillingCycle.MONTHLY:
             return start_date + timedelta(days=30)
@@ -253,13 +254,13 @@ class PlanService:
         Returns:
             list[Plan]: 過期方案列表
         """
-        now = datetime.now()
+        current_time = now()
         stmt = (
             select(Plan)
             .where(
                 Plan.is_active.is_(True),
                 Plan.is_deleted.is_(False),
-                Plan.due_date < now,
+                Plan.due_date < current_time,
                 Plan.level != 4,  # Admin 永不過期
             )
         )

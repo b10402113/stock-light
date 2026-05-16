@@ -5,7 +5,9 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
+
+from src.schemas.base import BaseSchema
 
 
 class IndicatorType(StrEnum):
@@ -21,11 +23,19 @@ class RSIData(BaseModel):
 
     value: Decimal = Field(..., description="RSI value (0-100)")
 
+    @field_serializer("value")
+    def serialize_decimal(self, v: Decimal) -> float:
+        return float(v)
+
 
 class SMAData(BaseModel):
     """SMA indicator data structure"""
 
     value: Decimal = Field(..., ge=0, description="SMA value")
+
+    @field_serializer("value")
+    def serialize_decimal(self, v: Decimal) -> float:
+        return float(v)
 
 
 class KDJData(BaseModel):
@@ -35,6 +45,10 @@ class KDJData(BaseModel):
     d: Decimal = Field(..., description="D value")
     j: Decimal = Field(..., description="J value")
 
+    @field_serializer("k", "d", "j")
+    def serialize_decimal(self, v: Decimal) -> float:
+        return float(v)
+
 
 class MACDData(BaseModel):
     """MACD indicator data structure"""
@@ -43,11 +57,13 @@ class MACDData(BaseModel):
     signal: Decimal = Field(..., description="Signal line")
     histogram: Decimal = Field(..., description="MACD histogram (MACD - Signal)")
 
+    @field_serializer("macd", "signal", "histogram")
+    def serialize_decimal(self, v: Decimal) -> float:
+        return float(v)
 
-class StockIndicatorResponse(BaseModel):
+
+class StockIndicatorResponse(BaseSchema):
     """Stock indicator response schema"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(..., description="Indicator record ID")
     stock_id: int = Field(..., description="Stock ID")

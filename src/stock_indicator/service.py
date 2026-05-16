@@ -48,6 +48,7 @@ class StockIndicatorService:
             constraint="uq_stock_indicator_stock_key",
             set_={
                 "data": stmt.excluded.data,
+                "updated_at": func.now(),
             },
         )
         stmt = stmt.returning(StockIndicator)
@@ -91,6 +92,7 @@ class StockIndicatorService:
             constraint="uq_stock_indicator_stock_key",
             set_={
                 "data": stmt.excluded.data,
+                "updated_at": func.now(),
             },
         )
 

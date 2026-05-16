@@ -29,6 +29,7 @@ from src.subscriptions.schema import (
     StockBrief,
     TimeframeConfig,
 )
+from src.utils.timezone import now
 
 
 logger = logging.getLogger(__name__)
@@ -495,7 +496,7 @@ class NotificationHistoryService:
             indicator_subscription_id=indicator_subscription_id,
             triggered_value=triggered_value,
             send_status="pending",
-            triggered_at=datetime.now(),
+            triggered_at=now(),
         )
         db.add(log)
         await db.commit()

@@ -5,6 +5,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.schemas.base import BaseSchema
+
 
 # Request schemas
 class WatchlistCreate(BaseModel):
@@ -36,10 +38,8 @@ class WatchlistStockUpdate(BaseModel):
 
 
 # Response schemas
-class WatchlistStockItem(BaseModel):
+class WatchlistStockItem(BaseSchema):
     """自選股清單內的股票"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     stock_id: int = Field(..., description="股票 ID")
     symbol: str = Field(..., description="股票代碼")
@@ -50,10 +50,8 @@ class WatchlistStockItem(BaseModel):
     created_at: datetime = Field(..., description="加入時間")
 
 
-class WatchlistResponse(BaseModel):
+class WatchlistResponse(BaseSchema):
     """自選股清單響應"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(..., description="清單 ID")
     name: str = Field(..., description="清單名稱")
@@ -63,10 +61,8 @@ class WatchlistResponse(BaseModel):
     created_at: datetime = Field(..., description="創建時間")
 
 
-class WatchlistDetailResponse(BaseModel):
+class WatchlistDetailResponse(BaseSchema):
     """自選股清單詳細響應（包含股票列表）"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(..., description="清單 ID")
     name: str = Field(..., description="清單名稱")
@@ -75,10 +71,8 @@ class WatchlistDetailResponse(BaseModel):
     stocks: list[WatchlistStockItem] = Field(default_factory=list, description="股票列表")
 
 
-class WatchlistStockResponse(BaseModel):
+class WatchlistStockResponse(BaseSchema):
     """自選股清單內股票響應"""
-
-    model_config = ConfigDict(from_attributes=True)
 
     watchlist_id: int = Field(..., description="清單 ID")
     stock_id: int = Field(..., description="股票 ID")
