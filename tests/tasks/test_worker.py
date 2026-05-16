@@ -227,7 +227,7 @@ class TestDefaultWorkerSettings:
             "persist_redis_to_database",
             "sync_active_stocks_to_redis",
             "process_scheduled_reminders",
-            "calculate_stock_indicators",
+            "update_indicator",
         ]
         actual_functions = [f.__name__ for f in DefaultWorkerSettings.functions]
         for expected in expected_functions:

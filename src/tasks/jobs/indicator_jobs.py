@@ -2,66 +2,57 @@
 
 import datetime
 import logging
-import time
 from typing import Any
 
-from sqlalchemy import select
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.table import Table
 
 from src.clients.yfinance_client import YFinanceClient
 from src.config import settings
 from src.database import SessionFactory
+from src.logging_config import get_console
 from src.stock_indicator.calculator import calculate_indicators_from_prices
-from src.stock_indicator.schema import (
-    IndicatorType,
-    StockIndicatorUpsert,
-    parse_indicator_key,
-)
+from src.stock_indicator.schema import IndicatorType, parse_indicator_key
 from src.stock_indicator.service import StockIndicatorService
-from src.stocks.model import DailyPrice, Stock
 from src.stocks.schema import DailyPriceBase
 from src.stocks.service import DailyPriceService, StockService
 
 logger = logging.getLogger(__name__)
+console = get_console()
 
-# Redis keys for tracking failed stocks
-REDIS_INDICATOR_FAILED_KEY = "indicator:failed"
 REDIS_INDICATOR_RETRY_PREFIX = "indicator:retry:"
+REDIS_INDICATOR_FAILED_KEY = "indicator:failed"
+REDIS_INDICATOR_ERROR_PREFIX = "indicator:error:"  # Store error reason
 
 
-async def calculate_stock_indicators(
-    ctx: dict[str, Any],
-    stock_id: int | None = None,
-) -> dict[str, Any]:
+async def update_indicator(ctx: dict[str, Any]) -> dict[str, Any]:
     """Calculate indicators for stocks with active subscriptions.
 
-    This job periodically fetches stocks that have indicator subscriptions.
+    Cron job running every minute. Queries indicator_subscriptions table,
+    extracts required indicators, and calculates them for each stock.
 
-    For each stock, it:
-    1. Checks daily_prices table for available historical data
-    2. Falls back to yfinance API if data is insufficient
-    3. Calculates required indicators based on subscriptions
-    4. Stores results in stock_indicator table with BIGINT updated_at timestamp
-
-    Error handling:
-    - Logs errors for individual stock failures without stopping batch
-    - Tracks failed stocks in Redis with retry count
-    - Skips stocks that exceed max retries
+    Flow:
+    1. Query stocks with active indicator subscriptions
+    2. For each stock:
+       - Get required indicator keys from subscriptions
+       - Fetch historical prices from daily_prices (or yfinance fallback)
+       - Calculate indicators and upsert to stock_indicator table
+    3. Handle errors gracefully, track failures in Redis
 
     Args:
         ctx: ARQ context dict with 'redis'
-        stock_id: Optional specific stock ID to calculate (if None, calculate all)
 
     Returns:
         dict with processing statistics
     """
-    logger.info("Starting indicator calculation job")
+    logger.info("[job]Starting update_indicator job[/job]")
+    console.print("[time]━━━ Indicator Update ━━━[/time]")
 
     redis_pool = ctx["redis"]
 
     result = {
         "stocks_processed": 0,
         "indicators_calculated": 0,
-        "stocks_skipped": 0,
         "yfinance_fetches": 0,
         "errors": [],
         "success": False,
@@ -69,155 +60,187 @@ async def calculate_stock_indicators(
 
     try:
         async with SessionFactory() as db:
-            # Get stocks to process
-            if stock_id:
-                stock_ids = [stock_id]
-            else:
-                # Get all stocks with active indicator subscriptions
-                stock_ids = await StockIndicatorService.get_stocks_with_indicators(db)
+            # Get stocks with active indicator subscriptions
+            stock_ids = await StockIndicatorService.get_stocks_with_indicators(db)
+            console.print(f"{stock_ids}")
+            if not stock_ids:
+                logger.info("No stocks with indicator subscriptions")
+                console.print("[info]No stocks with indicator subscriptions[/info]")
+                result["success"] = True
+                return result
 
-            logger.info(f"Processing {len(stock_ids)} stocks for indicator calculation")
+            logger.info(f"Processing [stock]{len(stock_ids)}[/stock] stocks for indicator calculation")
+            console.print(f"[cyan]Processing {len(stock_ids)} stocks...[/cyan]")
 
-            for sid in stock_ids:
-                try:
-                    # Check retry count for failed stocks
-                    retry_count = await redis_pool.get(f"{REDIS_INDICATOR_RETRY_PREFIX}{sid}")
-                    if retry_count and int(retry_count) >= settings.INDICATOR_MAX_RETRIES:
-                        logger.warning(
-                            f"Stock {sid} exceeded max retries ({retry_count}), skipping"
+            # Process stocks with progress bar
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task("[cyan]Calculating indicators...", total=len(stock_ids))
+
+                for sid in stock_ids:
+                    try:
+                        # Check retry count and error reason for failed stocks
+                        retry_count = await redis_pool.get(
+                            f"{REDIS_INDICATOR_RETRY_PREFIX}{sid}"
                         )
-                        result["stocks_skipped"] += 1
-                        continue
-
-                    # Get stock info
-                    stock = await StockService.get_by_id(db, sid)
-                    if not stock or stock.is_deleted:
-                        logger.warning(f"Stock {sid} not found or deleted, skipping")
-                        continue
-
-                    # Get required indicator keys for this stock
-                    required_keys = await StockIndicatorService.get_required_indicator_keys(
-                        db, sid
-                    )
-
-                    if not required_keys:
-                        logger.info(f"No indicator subscriptions for stock {sid}, skipping")
-                        continue
-
-                    # Determine minimum required days based on indicator keys
-                    min_days = _get_min_required_days(required_keys)
-                    logger.info(
-                        f"Stock {sid}: needs {min_days} days of data for {len(required_keys)} indicators"
-                    )
-
-                    # Fetch historical prices from daily_prices table
-                    prices = await DailyPriceService.get_latest_prices(db, sid, n=min_days + 20)
-
-                    # If insufficient data, fetch from yfinance
-                    if len(prices) < min_days:
-                        logger.info(
-                            f"Stock {sid}: insufficient data ({len(prices)} < {min_days}), fetching from yfinance"
+                        error_reason = await redis_pool.get(
+                            f"{REDIS_INDICATOR_ERROR_PREFIX}{sid}"
                         )
-
-                        fetched_prices = await _fetch_prices_from_yfinance(
-                            stock.symbol,
-                            stock.market,
-                            min_days + 30,  # Fetch extra days for buffer
-                        )
-
-                        if fetched_prices:
-                            # Upsert fetched prices to daily_prices table
-                            await DailyPriceService.bulk_insert_prices(db, sid, fetched_prices)
-
-                            # Re-fetch from database after insertion
-                            prices = await DailyPriceService.get_latest_prices(
-                                db, sid, n=min_days + 20
+                        if retry_count and int(retry_count) >= settings.INDICATOR_MAX_RETRIES:
+                            error_msg = error_reason.decode() if error_reason else "unknown error"
+                            logger.warning(
+                                f"[warning]Stock [stock]{sid}[/stock] exceeded max retries ({int(retry_count)}), "
+                                f"skipping - [error]original error: {error_msg}[/error]"
                             )
-                            result["yfinance_fetches"] += 1
-                            logger.info(
-                                f"Stock {sid}: fetched {len(fetched_prices)} prices from yfinance"
+                            console.print(
+                                f"[yellow]⚠ Stock {sid} skipped (max retries) - {error_msg}[/yellow]"
                             )
-                        else:
-                            logger.warning(f"Stock {sid}: failed to fetch prices from yfinance")
-                            await _track_failed_stock(redis_pool, sid)
+                            progress.advance(task)
                             continue
 
-                    if len(prices) < min_days:
-                        logger.warning(
-                            f"Stock {sid}: still insufficient data after yfinance fetch"
+                        # Get stock info
+                        stock = await StockService.get_by_id(db, sid)
+                        if not stock or stock.is_deleted:
+                            logger.warning(f"Stock [stock]{sid}[/stock] not found or deleted, skipping")
+                            progress.advance(task)
+                            continue
+
+                        # Get required indicator keys for this stock
+                        required_keys = await StockIndicatorService.get_required_indicator_keys(
+                            db, sid
                         )
-                        await _track_failed_stock(redis_pool, sid)
+
+                        if not required_keys:
+                            logger.info(f"No indicator subscriptions for stock [stock]{sid}[/stock], skipping")
+                            progress.advance(task)
+                            continue
+
+                        # Determine minimum required days based on indicator keys
+                        min_days = _get_min_required_days(required_keys)
+                        logger.info(
+                            f"Stock [stock]{sid}[/stock]: needs [time]{min_days}[/time] days for [job]{len(required_keys)}[/job] indicators"
+                        )
+
+                        # Fetch historical prices from daily_prices table
+                        prices = await DailyPriceService.get_latest_prices(db, sid, n=min_days + 20)
+
+                        # If insufficient data, fetch from yfinance
+                        if len(prices) < min_days:
+                            logger.info(
+                                f"Stock [stock]{sid}[/stock]: insufficient data ([warning]{len(prices)} < {min_days}[/warning]), fetching yfinance"
+                            )
+
+                            fetched_prices = await _fetch_prices_from_yfinance(
+                                stock.symbol,
+                                stock.market,
+                                min_days + 30,
+                            )
+
+                            if fetched_prices:
+                                await DailyPriceService.bulk_insert_prices(db, sid, fetched_prices)
+                                prices = await DailyPriceService.get_latest_prices(
+                                    db, sid, n=min_days + 20
+                                )
+                                result["yfinance_fetches"] += 1
+                                logger.info(
+                                    f"Stock [stock]{sid}[/stock]: fetched [success]{len(fetched_prices)}[/success] prices from yfinance"
+                                )
+                            else:
+                                error_reason = f"yfinance fetch failed for symbol {stock.symbol} (market={stock.market})"
+                                logger.warning(f"[warning]Stock [stock]{sid}[/stock]: {error_reason}[/warning]")
+                                await _track_failed_stock(redis_pool, sid, error_reason)
+                                progress.advance(task)
+                                continue
+
+                        if len(prices) < min_days:
+                            error_reason = f"insufficient data ({len(prices)} < {min_days}) after yfinance fallback"
+                            logger.warning(f"[warning]Stock [stock]{sid}[/stock]: {error_reason}[/warning]")
+                            await _track_failed_stock(redis_pool, sid, error_reason)
+                            progress.advance(task)
+                            continue
+
+                        # Prepare price data for calculation (oldest to newest)
+                        prices_asc = list(reversed(prices))
+                        closes = [p.close for p in prices_asc]
+                        ohlcs = [(p.open, p.high, p.low, p.close) for p in prices_asc]
+
+                        # Calculate indicators
+                        calculated = calculate_indicators_from_prices(
+                            closes=closes,
+                            ohlcs=ohlcs,
+                            indicator_keys=required_keys,
+                        )
+
+                        # Upsert to database
+                        if calculated:
+                            from src.stock_indicator.schema import StockIndicatorUpsert
+
+                            indicators_to_upsert = [
+                                StockIndicatorUpsert(
+                                    stock_id=sid,
+                                    indicator_key=key,
+                                    data=data,
+                                )
+                                for key, data in calculated.items()
+                            ]
+
+                            count = await StockIndicatorService.bulk_upsert_indicators(
+                                db, indicators_to_upsert
+                            )
+                            result["indicators_calculated"] += count
+                            logger.info(
+                                f"Stock [stock]{sid}[/stock]: calculated [success]{len(calculated)}[/success] indicators, upserted [job]{count}[/job]"
+                            )
+
+                            # Clear retry count and error reason on success
+                            await redis_pool.delete(f"{REDIS_INDICATOR_RETRY_PREFIX}{sid}")
+                            await redis_pool.delete(f"{REDIS_INDICATOR_ERROR_PREFIX}{sid}")
+
+                        result["stocks_processed"] += 1
+                        progress.advance(task)
+
+                    except Exception as e:
+                        error_reason = str(e)
+                        error_msg = f"Stock [stock]{sid}[/stock]: {error_reason}"
+                        logger.error(f"[error]{error_msg}[/error]", exc_info=True)
+                        result["errors"].append(error_msg)
+                        await _track_failed_stock(redis_pool, sid, error_reason)
+                        progress.advance(task)
                         continue
 
-                    # Prepare price data for calculation
-                    # Prices are in descending order (newest first), reverse to oldest-first
-                    prices_asc = list(reversed(prices))
-                    closes = [p.close for p in prices_asc]
-                    ohlcs = [(p.open, p.high, p.low, p.close) for p in prices_asc]
-
-                    # Calculate indicators
-                    calculated = calculate_indicators_from_prices(
-                        closes=closes,
-                        ohlcs=ohlcs,
-                        indicator_keys=required_keys,
-                    )
-
-                    # Upsert to database
-                    if calculated:
-                        indicators_to_upsert = [
-                            StockIndicatorUpsert(
-                                stock_id=sid,
-                                indicator_key=key,
-                                data=data,
-                            )
-                            for key, data in calculated.items()
-                        ]
-
-                        count = await StockIndicatorService.bulk_upsert_indicators(
-                            db, indicators_to_upsert
-                        )
-                        result["indicators_calculated"] += count
-                        logger.info(
-                            f"Stock {sid}: calculated {len(calculated)} indicators, upserted {count}"
-                        )
-
-                        # Clear retry count on success
-                        await redis_pool.delete(f"{REDIS_INDICATOR_RETRY_PREFIX}{sid}")
-
-                    result["stocks_processed"] += 1
-
-                except Exception as e:
-                    error_msg = f"Stock {sid}: {str(e)}"
-                    logger.error(error_msg, exc_info=True)
-                    result["errors"].append(error_msg)
-                    await _track_failed_stock(redis_pool, sid)
-                    continue
-
         result["success"] = True
+
+        # Print summary table
+        table = Table(title="Indicator Update Summary", show_header=True, header_style="bold cyan")
+        table.add_column("Metric", style="dim")
+        table.add_column("Count", justify="right")
+        table.add_row("Stocks Processed", str(result["stocks_processed"]))
+        table.add_row("Indicators Calculated", str(result["indicators_calculated"]))
+        table.add_row("YFinance Fetches", str(result["yfinance_fetches"]))
+        table.add_row("Errors", str(len(result["errors"])))
+        console.print(table)
+
         logger.info(
-            f"Indicator calculation completed: processed {result['stocks_processed']} stocks, "
-            f"calculated {result['indicators_calculated']} indicators, "
-            f"yfinance fetches: {result['yfinance_fetches']}, "
-            f"skipped: {result['stocks_skipped']}"
+            f"[success]update_indicator completed[/success]: processed [stock]{result['stocks_processed']}[/stock] stocks, "
+            f"calculated [job]{result['indicators_calculated']}[/job] indicators, "
+            f"yfinance fetches: [time]{result['yfinance_fetches']}[/time]"
         )
 
     except Exception as e:
         result["errors"].append(f"Job error: {str(e)}")
-        logger.error(f"Indicator calculation job failed: {e}", exc_info=True)
+        logger.error(f"[error]update_indicator job failed: {e}[/error]", exc_info=True)
         result["success"] = False
 
     return result
 
 
 def _get_min_required_days(indicator_keys: list[str]) -> int:
-    """Calculate minimum required days of price data for given indicators.
-
-    Args:
-        indicator_keys: List of indicator keys (e.g., ["RSI_14_D", "MACD_12_26_9_D"])
-
-    Returns:
-        int: Minimum number of days required
-    """
+    """Calculate minimum required days of price data for given indicators."""
     min_days = 30  # Default minimum
 
     for key in indicator_keys:
@@ -225,28 +248,23 @@ def _get_min_required_days(indicator_keys: list[str]) -> int:
             ind_type, params, _ = parse_indicator_key(key)
 
             if ind_type == IndicatorType.RSI:
-                # RSI needs period + 1 days
                 period = params[0] if params else 14
                 min_days = max(min_days, period + 1)
 
             elif ind_type == IndicatorType.SMA:
-                # SMA needs period days
                 period = params[0] if params else 20
                 min_days = max(min_days, period)
 
             elif ind_type == IndicatorType.KDJ:
-                # KDJ needs k_period days
                 k_period = params[0] if params else 9
                 min_days = max(min_days, k_period)
 
             elif ind_type == IndicatorType.MACD:
-                # MACD needs slow_period + signal_period days
                 slow_period = params[1] if len(params) > 1 else 26
                 signal_period = params[2] if len(params) > 2 else 9
                 min_days = max(min_days, slow_period + signal_period)
 
         except ValueError:
-            # Skip invalid keys
             continue
 
     return min_days
@@ -257,19 +275,9 @@ async def _fetch_prices_from_yfinance(
     market: str,
     days: int,
 ) -> list[DailyPriceBase] | None:
-    """Fetch historical prices from yfinance API.
-
-    Args:
-        symbol: Stock symbol
-        market: Stock market (e.g., "TW")
-        days: Number of days to fetch
-
-    Returns:
-        list[DailyPriceBase] | None: Price data or None if failed
-    """
+    """Fetch historical prices from yfinance API."""
     try:
         end_date = datetime.date.today()
-        # Fetch more calendar days to get enough trading days
         start_date = end_date - datetime.timedelta(days=int(days * 1.5))
 
         yfinance_client = YFinanceClient()
@@ -302,26 +310,29 @@ async def _fetch_prices_from_yfinance(
         return None
 
 
-async def _track_failed_stock(redis_pool, stock_id: int) -> None:
+async def _track_failed_stock(redis_pool, stock_id: int, error_reason: str = "") -> None:
     """Track failed stock in Redis for retry management.
 
     Args:
-        redis_pool: Redis connection pool from ARQ
+        redis_pool: Redis connection pool
         stock_id: Stock ID that failed
+        error_reason: Description of why the stock failed
     """
     retry_key = f"{REDIS_INDICATOR_RETRY_PREFIX}{stock_id}"
+    error_key = f"{REDIS_INDICATOR_ERROR_PREFIX}{stock_id}"
 
-    # Get current retry count
     current = await redis_pool.get(retry_key)
     retry_count = int(current) if current else 0
-
-    # Increment retry count
     retry_count += 1
 
-    # Set retry count with 1 hour expiry
     await redis_pool.set(retry_key, str(retry_count), ex=3600)
-
-    # Add to failed set for monitoring
     await redis_pool.sadd(REDIS_INDICATOR_FAILED_KEY, str(stock_id))
 
-    logger.warning(f"Stock {stock_id} marked as failed (retry #{retry_count})")
+    # Store error reason for better debugging
+    if error_reason:
+        await redis_pool.set(error_key, error_reason, ex=3600)
+
+    logger.warning(
+        f"[warning]Stock [stock]{stock_id}[/stock] marked as failed "
+        f"(retry #{retry_count}) - [error]{error_reason}[/error]"
+    )

@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     CRON_PERSIST_MINUTES: str = "*/1"  # Every 1 minutes for testing
     CRON_SYNC_STOCKS_MINUTES: str = "*/1"  # Every 5 minutes: sync active stocks to Redis
     CRON_REMINDER_MINUTES: str = "*/1"  # Every 1 minute: process scheduled reminders
-    CRON_INDICATOR_MINUTES: str = "*/5"  # Every 5 minutes: update indicator data
+    CRON_INDICATOR_MINUTES: str = "*/1"  # Every 1 minute: update indicator data
 
     # Indicator Data Updater Worker
     INDICATOR_UPDATE_INTERVAL_MINUTES: int = 5  # minutes
