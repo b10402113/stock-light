@@ -52,3 +52,15 @@ Not Started
   - Created comprehensive test suite (11 tests, all passing)
   - Updated API documentation with unified error response format and examples
   - Benefits: Consistent error format across all endpoints, better error messages, easier debugging
+- 2026-05-16: Database Timestamp Standardization
+  - Added TIMEZONE configuration (Asia/Taipei) to Settings
+  - Created timezone utility module with now(), to_local(), from_str() functions
+  - Created BaseSchema with unified datetime serialization to Asia/Taipei timezone
+  - Updated all response schemas to inherit from BaseSchema (UserResponse, StockIndicatorResponse, SubscriptionResponse, PlanResponse, WatchlistResponse, etc.)
+  - Updated soft_delete() methods to use timezone utilities
+  - Added Alembic migration to set PostgreSQL timezone and convert existing UTC data (+8 hours)
+  - Fixed upsert operations to explicitly update updated_at field in stock_indicator table
+  - Replaced datetime.utcnow() calls in service files with timezone utilities
+  - Created comprehensive test suite for timezone handling (13 tests, all passing)
+  - Architecture: Database stores UTC (standard), API responses show Asia/Taipei timezone
+  - Benefits: Consistent datetime handling, user-friendly local time display, easier debugging
